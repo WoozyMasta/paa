@@ -116,6 +116,11 @@ func expectedMipSize(paxType PaxType, width, height int) int {
 
 // Image decodes the mipmap into an image.Image (NRGBA for non-DXT, DXT decoded via bcn).
 func (m *MipMap) Image() (image.Image, error) {
+	return m.ImageWithOptions(nil)
+}
+
+// ImageWithOptions decodes the mipmap into an image.Image with optional BCn decode options.
+func (m *MipMap) ImageWithOptions(opts *DecodeOptions) (image.Image, error) {
 	w, h := int(m.Width), int(m.Height)
 	if w <= 0 || h <= 0 || len(m.Data) == 0 {
 		return nil, ErrInsufficientData
@@ -126,10 +131,17 @@ func (m *MipMap) Image() (image.Image, error) {
 		if bf == bcn.FormatUnknown {
 			return nil, ErrUnsupportedPixelFmt
 		}
-		img, err := bcn.DecodeImage(m.Data, w, h, bf)
+
+		var bcnOpts *bcn.DecodeOptions
+		if opts != nil && opts.BCn != nil {
+			bcnOpts = opts.BCn
+		}
+
+		img, err := bcn.DecodeImageWithOptions(m.Data, w, h, bf, bcnOpts)
 		if err != nil {
 			return nil, errors.Join(ErrDXTDecode, err)
 		}
+
 		return img, nil
 	}
 

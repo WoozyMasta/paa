@@ -27,7 +27,7 @@ func EncodeWithTexConfigOptions(w io.Writer, img image.Image, name string, cfg t
 		}
 		opts.ForceCXAMFull = isDXT(opts.Type) || opts.Type == 0
 		if cfg.ApplyDefaultErrorMetrics {
-			opts.RGBWeights = &bcn.RGBWeights{R: 5, G: 9, B: 2}
+			ensureBCnOptions(opts).RGBWeights = &bcn.RGBWeights{R: 5, G: 9, B: 2}
 		}
 		if override != nil {
 			applyEncodeOverrides(opts, override)
@@ -128,11 +128,11 @@ func EncodeOptionsFromHint(img image.Image, hint texconfig.TextureHint, cfg texc
 
 	// Apply error metrics.
 	if hint.ErrorMetrics == texconfig.ErrorMetricsDistance {
-		opts.RGBWeights = &bcn.RGBWeights{R: 5, G: 5, B: 0}
+		ensureBCnOptions(opts).RGBWeights = &bcn.RGBWeights{R: 5, G: 5, B: 0}
 	} else if hint.ErrorMetrics != texconfig.ErrorMetricsDefault {
-		opts.RGBWeights = &bcn.RGBWeights{R: 5, G: 5, B: 5}
+		ensureBCnOptions(opts).RGBWeights = &bcn.RGBWeights{R: 5, G: 5, B: 5}
 	} else if cfg.ApplyDefaultErrorMetrics {
-		opts.RGBWeights = &bcn.RGBWeights{R: 5, G: 9, B: 2}
+		ensureBCnOptions(opts).RGBWeights = &bcn.RGBWeights{R: 5, G: 9, B: 2}
 	}
 
 	// Apply mipmap filter.
@@ -268,14 +268,8 @@ func applyEncodeOverrides(dst *EncodeOptions, override *EncodeOptions) {
 		return
 	}
 
-	if override.Quality != nil {
-		dst.Quality = override.Quality
-	}
-	if override.UseBestQuality {
-		dst.UseBestQuality = true
-	}
-	if override.RGBWeights != nil {
-		dst.RGBWeights = override.RGBWeights
+	if override.BCn != nil {
+		dst.BCn = mergeBCnOptions(dst.BCn, override.BCn)
 	}
 	if override.SkipSwizzle {
 		dst.SkipSwizzle = true
@@ -287,6 +281,60 @@ func applyEncodeOverrides(dst *EncodeOptions, override *EncodeOptions) {
 	if override.ForceLZSS {
 		dst.ForceLZSS = true
 	}
+}
+
+// ensureBCnOptions ensures that the BCn options are set.
+func ensureBCnOptions(opts *EncodeOptions) *bcn.EncodeOptions {
+	if opts == nil {
+		return nil
+	}
+
+	if opts.BCn == nil {
+		opts.BCn = &bcn.EncodeOptions{}
+	}
+
+	return opts.BCn
+}
+
+// mergeBCnOptions merges the BCn options.
+func mergeBCnOptions(dst *bcn.EncodeOptions, override *bcn.EncodeOptions) *bcn.EncodeOptions {
+	if override == nil {
+		return dst
+	}
+
+	if dst == nil {
+		clone := *override
+		if override.Refinement != nil {
+			ref := *override.Refinement
+			clone.Refinement = &ref
+		}
+		return &clone
+	}
+
+	if override.RGBWeights != nil {
+		dst.RGBWeights = override.RGBWeights
+	}
+	if override.Refinement != nil {
+		ref := *override.Refinement
+		dst.Refinement = &ref
+	}
+	if override.QualityLevel != 0 {
+		dst.QualityLevel = override.QualityLevel
+	}
+	if override.Workers != 0 {
+		dst.Workers = override.Workers
+	}
+	if override.GenerateMipmaps {
+		dst.GenerateMipmaps = true
+	}
+	if override.UseSRGB {
+		dst.UseSRGB = true
+	}
+	if override.AlphaThreshold != 0 {
+		dst.AlphaThreshold = override.AlphaThreshold
+	}
+
+	return dst
 }
 
 // shouldSkipSwizzle checks if the swizzle should be skipped.

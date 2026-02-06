@@ -280,8 +280,8 @@ func TestRoundTripHeadersFromPAAFiles(t *testing.T) {
 	if cfgErr != nil {
 		t.Fatalf("default texconfig: %v", cfgErr)
 	}
-	q := bcn.QualityFast
-	override := &EncodeOptions{Quality: &q}
+	q := bcn.QualityLevelFast
+	override := &EncodeOptions{BCn: &bcn.EncodeOptions{QualityLevel: q}}
 
 	for _, path := range files {
 		path := path

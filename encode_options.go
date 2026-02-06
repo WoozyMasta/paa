@@ -5,21 +5,18 @@ import (
 	"github.com/woozymasta/paa/texconfig"
 )
 
-// EncodeOptions configures PAA encoding (format, normal-map handling, and DXT quality).
+// EncodeOptions configures PAA encoding (format, normal-map handling, and BCn options).
 // Used by EncodeWithOptions and EncodeOptionsFromHint.
 type EncodeOptions struct {
-	// Quality overrides DXT encoding quality. If nil, default is QualityBest for
-	// normal maps (UseBestQuality) else QualityBalanced. Set via CLI -quality=fast|balanced|best.
-	Quality *bcn.Quality
+	// BCn overrides DXT/BCn encoding options (quality, refinement, workers).
+	// Nil uses bcn defaults.
+	BCn *bcn.EncodeOptions
 	// Swizzle applies a generic channel swizzle before encoding (TexConvert.cfg style).
 	Swizzle *texconfig.ChannelSwizzle
 	// GenerateMipmaps controls mipmap generation. Nil = default (true).
 	GenerateMipmaps *bool
 	// MipmapFilter selects a specific mipmap filter (TexConvert.cfg).
 	MipmapFilter *texconfig.MipmapFilter
-	// RGBWeights overrides DXT palette index weights (R, G, B). Nil = default; for nohq
-	// ToOptions sets NormalMapRGBWeights so the B channel is preserved.
-	RGBWeights *bcn.RGBWeights
 	// MaxMipCount limits the number of mip levels (including base). 0 = no limit.
 	MaxMipCount int
 	// MinMipSize stops mip generation when both dimensions are <= this value. 0 = default (4).
@@ -32,9 +29,6 @@ type EncodeOptions struct {
 	// NormalMapSwizzle, if true, applies swizzleNormalMap to the image before encoding
 	// and forces DXT5 (for _nohq normal maps). Ignored if Type is set to non-DXT.
 	NormalMapSwizzle bool
-	// UseBestQuality uses bcn.QualityBest for DXT encoding (slower, slightly better
-	// block choice and less blocky/stepped artifacts). Useful for normal maps.
-	UseBestQuality bool
 	// WriteNohqSwizzleTag when true writes SWIZTAGG (0x05040203) so Arma/original tools
 	// interpret DXT5 channels as nohq normal map (R=255-A, G=G, B=B, A=255-R).
 	WriteNohqSwizzleTag bool
@@ -56,6 +50,14 @@ type EncodeOptions struct {
 	ForceLZSS bool
 	// UseSRGB enables sRGB-aware downscale for mip generation.
 	UseSRGB bool
+}
+
+// DecodeOptions configures PAA decoding.
+// BCn options are forwarded to the BCn decoder (e.g. workers).
+type DecodeOptions struct {
+	// BCn overrides DXT/BCn decoding options (workers).
+	// Nil uses bcn defaults.
+	BCn *bcn.DecodeOptions
 }
 
 // Note: filename-based resolution is provided by the texconfig package.

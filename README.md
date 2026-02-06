@@ -66,9 +66,12 @@ For explicit control, use `EncodeWithOptions`:
 
 ```go
 opts := &paa.EncodeOptions{
-  Type:        paa.PaxDXT5,
-  UseLZO:      true,
+  Type:          paa.PaxDXT5,
+  UseLZO:        true,
   ForceCXAMFull: true,
+  BCn: &bcn.EncodeOptions{
+    QualityLevel: bcn.QualityLevelBest,
+  },
 }
 err := paa.EncodeWithOptions(w, img, opts)
 ```

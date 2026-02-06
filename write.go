@@ -117,18 +117,10 @@ func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error 
 		}
 	}
 
-	// BCn encoder quality: default is balanced, best for normal maps, fast for others.
-	var bcnQuality bcn.Quality
-	if opts != nil && opts.Quality != nil {
-		bcnQuality = *opts.Quality
-	} else if opts != nil && opts.UseBestQuality {
-		bcnQuality = bcn.QualityBest
-	} else {
-		bcnQuality = bcn.QualityBalanced
-	}
-	bcnOpts := &bcn.EncodeOptions{Quality: bcnQuality}
-	if opts != nil && opts.RGBWeights != nil {
-		bcnOpts.RGBWeights = opts.RGBWeights
+	// BCn encoder options (quality/refinement/workers).
+	var bcnOpts *bcn.EncodeOptions
+	if opts != nil && opts.BCn != nil {
+		bcnOpts = opts.BCn
 	}
 
 	useDXT5 := paxType == PaxDXT5

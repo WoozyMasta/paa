@@ -11,6 +11,12 @@ import (
 // Decode reads a PAA stream and returns the first mip level as an image.
 // It implements the signature required by image.RegisterFormat.
 func Decode(r io.Reader) (image.Image, error) {
+	return DecodeWithOptions(r, nil)
+}
+
+// DecodeWithOptions reads a PAA stream and returns the first mip level as an image
+// using optional BCn decode settings.
+func DecodeWithOptions(r io.Reader, opts *DecodeOptions) (image.Image, error) {
 	p, err := DecodePAA(r)
 	if err != nil {
 		return nil, err
@@ -20,7 +26,7 @@ func Decode(r io.Reader) (image.Image, error) {
 		return nil, ErrNoMipmaps
 	}
 
-	img, err := p.MipMaps[0].Image()
+	img, err := p.MipMaps[0].ImageWithOptions(opts)
 	if err != nil {
 		return nil, err
 	}
