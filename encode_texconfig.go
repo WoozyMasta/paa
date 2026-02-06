@@ -127,12 +127,19 @@ func EncodeOptionsFromHint(img image.Image, hint texconfig.TextureHint, cfg texc
 	}
 
 	// Apply error metrics.
-	if hint.ErrorMetrics == texconfig.ErrorMetricsDistance {
+	switch hint.ErrorMetrics {
+	case texconfig.ErrorMetricsDistance:
 		ensureBCnOptions(opts).RGBWeights = &bcn.RGBWeights{R: 5, G: 5, B: 0}
-	} else if hint.ErrorMetrics != texconfig.ErrorMetricsDefault {
+	case texconfig.ErrorMetricsNormalMap:
 		ensureBCnOptions(opts).RGBWeights = &bcn.RGBWeights{R: 5, G: 5, B: 5}
-	} else if cfg.ApplyDefaultErrorMetrics {
-		ensureBCnOptions(opts).RGBWeights = &bcn.RGBWeights{R: 5, G: 9, B: 2}
+	case texconfig.ErrorMetricsDefault:
+		if cfg.ApplyDefaultErrorMetrics {
+			ensureBCnOptions(opts).RGBWeights = &bcn.RGBWeights{R: 5, G: 9, B: 2}
+		}
+
+	// save all by default because dont know what is it (maybe normal map or some special format with strong B channel)
+	default:
+		ensureBCnOptions(opts).RGBWeights = &bcn.RGBWeights{R: 5, G: 5, B: 5}
 	}
 
 	// Apply mipmap filter.

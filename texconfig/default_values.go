@@ -182,7 +182,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				EnableDXT:    boolPtr(true),
 				MipmapFilter: MipmapFilterNormalizeNormalMapAlpha,
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 			},
 			{
 				ClassName:    "normalmap_short",
@@ -191,7 +191,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				EnableDXT:    boolPtr(true),
 				MipmapFilter: MipmapFilterNormalizeNormalMapAlpha,
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 				Swizzle:      swizzle("", "", "", "1"),
 			},
 			{
@@ -201,7 +201,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				EnableDXT:    boolPtr(false),
 				MipmapFilter: MipmapFilterNormalizeNormalMapAlpha,
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 			},
 			{
 				ClassName:    "NormalMapNoise",
@@ -209,7 +209,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				Format:       TexFormatDXT5,
 				MipmapFilter: MipmapFilterNormalizeNormalMapNoise,
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 			},
 			{
 				ClassName:    "normalmap_hq",
@@ -217,7 +217,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				Format:       TexFormatDXT5,
 				Swizzle:      swizzle("1-A", "G", "B", "1-R"),
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 				MipmapFilter: MipmapFilterNormalizeNormalMapAlpha,
 			},
 			{
@@ -226,7 +226,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				Format:       TexFormatDXT5,
 				Swizzle:      swizzle("1", "G", "1", "1-R"),
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 				MipmapFilter: MipmapFilterNormalizeNormalMapAlpha,
 			},
 			{
@@ -235,7 +235,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				Format:       TexFormatDXT5,
 				Swizzle:      swizzle("1-A", "G", "B", "1-R"),
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 				MipmapFilter: MipmapFilterNormalizeNormalMapFade,
 			},
 			{
@@ -244,7 +244,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				EnableDXT:    boolPtr(true),
 				MipmapFilter: MipmapFilterNormalizeNormalMapFade,
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 			},
 			{
 				ClassName:    "normalmapFade_uncompressed",
@@ -253,7 +253,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				EnableDXT:    boolPtr(false),
 				MipmapFilter: MipmapFilterNormalizeNormalMapFade,
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 			},
 			{
 				ClassName:    "normalmap_spec",
@@ -261,7 +261,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				EnableDXT:    boolPtr(true),
 				MipmapFilter: MipmapFilterNormalizeNormalMap,
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 			},
 			{
 				ClassName:    "normalmap_parallax",
@@ -271,7 +271,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				MipmapFilter: MipmapFilterNormalizeNormalMap,
 				DynRange:     boolPtr(false),
 				Swizzle:      swizzle("A", "G", "", "1-R"),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 			},
 			{
 				ClassName:    "normalmap_spec_uncompressed",
@@ -280,7 +280,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				EnableDXT:    boolPtr(false),
 				MipmapFilter: MipmapFilterNormalizeNormalMap,
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 			},
 			{
 				ClassName:    "normalmap_spec_hq",
@@ -288,7 +288,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				Format:       TexFormatDXT5,
 				Swizzle:      swizzle("1-A", "G", "B", "1-R"),
 				DynRange:     boolPtr(false),
-				ErrorMetrics: ErrorMetricsDistance,
+				ErrorMetrics: ErrorMetricsNormalMap,
 				MipmapFilter: MipmapFilterNormalizeNormalMapAlpha,
 			},
 			{

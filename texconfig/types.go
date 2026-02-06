@@ -199,8 +199,9 @@ type ErrorMetrics int
 
 // ErrorMetrics values mirror TexConvert.cfg errorMetrics names.
 const (
-	ErrorMetricsDefault  ErrorMetrics = iota // Default error metrics.
-	ErrorMetricsDistance                     // Distance error metrics.
+	ErrorMetricsDefault   ErrorMetrics = iota // Default error metrics.
+	ErrorMetricsDistance                      // Distance error metrics.
+	ErrorMetricsNormalMap                     // Normal map error metrics (custom).
 )
 
 func (m ErrorMetrics) String() string {
@@ -209,6 +210,8 @@ func (m ErrorMetrics) String() string {
 		return "Default"
 	case ErrorMetricsDistance:
 		return "Distance"
+	case ErrorMetricsNormalMap:
+		return "NormalMap"
 	default:
 		return fmt.Sprintf("ErrorMetrics(%d)", int(m))
 	}
@@ -220,15 +223,16 @@ func ParseErrorMetrics(s string) (ErrorMetrics, bool) {
 	s = strings.Trim(s, "\"")
 	s = strings.ToLower(s)
 
-	if s == "" || s == "default" {
+	switch s {
+	case "", "default":
 		return ErrorMetricsDefault, true
-	}
-
-	if s == "distance" {
+	case "distance":
 		return ErrorMetricsDistance, true
+	case "normalmap":
+		return ErrorMetricsNormalMap, true
+	default:
+		return ErrorMetricsDefault, false
 	}
-
-	return ErrorMetricsDefault, false
 }
 
 // MarshalText implements encoding.TextMarshaler.
