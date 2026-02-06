@@ -40,7 +40,6 @@ func ResolveTexConvert(name string, cfg TexConvertConfig) (TextureHint, bool) {
 		if wildcardMatch(pattern, lower) {
 			return hint, true
 		}
-
 	}
 
 	return TextureHint{}, false
