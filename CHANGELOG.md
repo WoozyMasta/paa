@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [0.1.1][] - 2026-02-06
+
+### Added
+
+* `EncodeOptions.BCn` passthrough to `bcn.EncodeOptions` for full control.
+* `DecodeOptions` and `DecodeWithOptions` to pass BCn decode settings.
+* `MipMap.ImageWithOptions` for BCn decode options.
+* `ErrorMetricsNormalMap` in `texconfig` for normal map tuning.
+
+### Changed
+
+* Normal map hints now use `ErrorMetricsNormalMap`, mapping to `RGBWeights 5/5/5`.
+* README examples updated for new BCn options.
+* BCn updated to more productive version 0.1.3 with support for parallelism.
+
+### Removed (Breaking)
+
+* `EncodeOptions.QualityLevel` and `EncodeOptions.RGBWeights`
+  (use `EncodeOptions.BCn` instead).
+
+[0.1.1]: https://github.com/WoozyMasta/paa/compare/v0.1.0...v0.1.1
+
 ## [0.1.0][] - 2026-02-04
 
 ### Added
