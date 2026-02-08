@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [0.1.2][] - 2026-02-08
+
+### Added
+
+* `DecodeMetadata` function for scanning PAA file metadata without
+  decoding full image data.
+
+[0.1.2]: https://github.com/WoozyMasta/paa/compare/v0.1.0...v0.1.2
+
 ## [0.1.1][] - 2026-02-06
 
 ### Added

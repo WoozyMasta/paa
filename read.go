@@ -1,8 +1,6 @@
 package paa
 
 import (
-	"bytes"
-	"encoding/binary"
 	"image"
 	"image/color"
 	"io"
@@ -82,76 +80,34 @@ func applySwizzleTag(p *PAA, img image.Image) image.Image {
 // not implement io.Seeker, the entire stream is read into memory first so that
 // we can seek (e.g. for image.Decode which may pass a non-seekable reader).
 func DecodePAA(r io.Reader) (*PAA, error) {
-	seeker, ok := r.(io.Seeker)
-	if !ok {
-		data, err := io.ReadAll(r)
-		if err != nil {
-			return nil, err
-		}
-
-		br := bytes.NewReader(data)
-		r = br
-		seeker = br
-	}
-
-	// Read PaxType as first tag.
-	header := make([]byte, 2)
-	if _, err := io.ReadFull(r, header); err != nil {
+	var err error
+	r, seeker, err := ensureSeeker(r)
+	if err != nil {
 		return nil, err
 	}
 
-	pType, ok := PaxTypeFromBytes(header)
-	if !ok {
-		return nil, ErrInvalidMagic
+	pType, err := readPaxType(r)
+	if err != nil {
+		return nil, err
+	}
+
+	tags, err := readGGATTags(r)
+	if err != nil {
+		return nil, err
+	}
+
+	offsets, err := sffoOffsets(tags)
+	if err != nil {
+		return nil, err
 	}
 
 	paa := &PAA{
 		Type:  pType,
-		Taggs: make(map[string][]byte),
-	}
-
-	// Read GGAT tags.
-	for {
-		sig := make([]byte, 4)
-		if _, err := io.ReadFull(r, sig); err != nil {
-			return nil, err
-		}
-
-		if string(sig) != "GGAT" {
-			break
-		}
-
-		nameBuf := make([]byte, 4)
-		if _, err := io.ReadFull(r, nameBuf); err != nil {
-			return nil, err
-		}
-		name := string(nameBuf)
-
-		var size uint32
-		if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
-			return nil, err
-		}
-
-		data := make([]byte, size)
-		if _, err := io.ReadFull(r, data); err != nil {
-			return nil, err
-		}
-		paa.Taggs[name] = data
-	}
-
-	// Read SFFO tag.
-	sffoData, ok := paa.Taggs["SFFO"]
-	if !ok {
-		return nil, ErrMissingSFFO
+		Taggs: tags,
 	}
 
 	// Read mipmaps from SFFO offsets.
-	for i := 0; i < len(sffoData)/4; i++ {
-		offset := binary.LittleEndian.Uint32(sffoData[i*4 : i*4+4])
-		if offset == 0 {
-			continue
-		}
-
+	for _, offset := range offsets {
 		if _, err := seeker.Seek(int64(offset), io.SeekStart); err != nil {
 			return nil, err
 		}
