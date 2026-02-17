@@ -5,7 +5,6 @@
 package texconfig
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -89,7 +88,7 @@ func buildTexConvertConfig(cfg *cfgFile) (TexConvertConfig, error) {
 		}
 	}
 	if hintsClass == nil {
-		return TexConvertConfig{}, errors.New("TextureHints class not found")
+		return TexConvertConfig{}, ErrTextureHintsClassNotFound
 	}
 
 	// Create a map of class names to classes for efficient lookup.
@@ -301,7 +300,7 @@ func cfgBool(v cfgValue) (bool, error) {
 		}
 
 	default:
-		return false, errors.New("invalid bool value")
+		return false, ErrInvalidBoolValue
 	}
 }
 
@@ -315,7 +314,7 @@ func cfgInt(v cfgValue) (int, error) {
 	case cfgString:
 		return strconv.Atoi(v.Str)
 	default:
-		return 0, errors.New("invalid int value")
+		return 0, ErrInvalidIntValue
 	}
 }
 

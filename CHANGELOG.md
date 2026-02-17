@@ -5,13 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog][],
 and this project adheres to [Semantic Versioning][].
 
-<!--
 ## Unreleased
 
-### Added
 ### Changed
-### Removed
--->
+
+* `texconfig` parse/validation sentinel errors are now centralized in
+  `texconfig/errors.go` (instead of inline `errors.New(...)` at call sites).
 
 ## [0.2.1][] - 2026-02-17
 

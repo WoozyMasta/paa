@@ -5,7 +5,6 @@
 package texconfig
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -100,7 +99,7 @@ func (l *lexer) next() (token, error) {
 			c := l.src[l.pos]
 			if c == '\\' {
 				if l.pos+1 >= len(l.src) {
-					return token{}, errors.New("unterminated escape in string")
+					return token{}, ErrUnterminatedEscapeInString
 				}
 
 				next := l.src[l.pos+1]
@@ -119,7 +118,7 @@ func (l *lexer) next() (token, error) {
 			l.pos++
 		}
 
-		return token{}, errors.New("unterminated string")
+		return token{}, ErrUnterminatedString
 	}
 
 	// symbols
@@ -210,7 +209,7 @@ func (l *lexer) skipSpaceAndComments() error {
 
 				// Check if the block comment is unterminated.
 				if l.pos >= len(l.src) {
-					return errors.New("unterminated block comment")
+					return ErrUnterminatedBlockComment
 				}
 
 				continue

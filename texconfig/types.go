@@ -5,7 +5,6 @@
 package texconfig
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -316,7 +315,7 @@ func ParseSwizzleExpr(s string) (SwizzleExpr, error) {
 	raw := strings.TrimSpace(s)
 	raw = strings.Trim(raw, "\"")
 	if raw == "" {
-		return SwizzleExpr{}, errors.New("empty swizzle expression")
+		return SwizzleExpr{}, ErrEmptySwizzleExpression
 	}
 
 	upper := strings.ToUpper(raw)
