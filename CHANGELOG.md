@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog][],
 and this project adheres to [Semantic Versioning][].
 
-## Unreleased
+## [0.2.2][] - 2026-02-17
 
 ### Added
 
@@ -15,11 +15,14 @@ and this project adheres to [Semantic Versioning][].
 * `DecodeMetadataBytes` helper for zero-copy friendly in-memory metadata decode.
 * `EncodeWithOptionsAndMetadataHeaders` for one-pass encode + compact metadata
   collection (no second decode pass of generated PAA).
+* `MainFlowMetadataDecode` benchmark for metadata-only decode performance.
 
 ### Changed
 
 * `texconfig` parse/validation sentinel errors are now centralized in
   `texconfig/errors.go` (instead of inline `errors.New(...)` at call sites).
+
+[0.2.2]: https://github.com/WoozyMasta/paa/compare/v0.2.1...v0.2.2
 
 ## [0.2.1][] - 2026-02-17
 
