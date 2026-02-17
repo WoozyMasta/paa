@@ -1,8 +1,13 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 package paa
 
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"image"
 	"io"
 
@@ -60,22 +65,27 @@ func readMipMap(r io.Reader, paxType PaxType) (*MipMap, error) {
 	}
 
 	var raw []byte
-	if storedSize == expectedRaw {
+	switch {
+	case storedSize == expectedRaw:
 		raw = payload
-	} else if isDXT(paxType) {
+	case isDXT(paxType):
 		// DXT: only LZO when top bit of width is set.
 		if !lzoFlag {
 			return nil, ErrInsufficientData
 		}
-		dec, err := lzo.Decompress(payload, lzo.DefaultDecompressOptions(expectedRaw))
+
+		lzoDst := make([]byte, expectedRaw)
+		dec, nRead, err := lzo.DecompressNInto(payload, lzoDst)
 		if err != nil {
-			if errors.Is(err, lzo.ErrLookBehindUnderrun) || errors.Is(err, lzo.ErrInputOverrun) {
-				return nil, errors.Join(ErrLZODecompress, err)
-			}
 			return nil, errors.Join(ErrLZODecompress, err)
 		}
+
+		if nRead != len(payload) {
+			return nil, errors.Join(ErrLZODecompress, fmt.Errorf("%w: consumed %d of %d bytes", ErrLZOTrailingInput, nRead, len(payload)))
+		}
+
 		raw = dec
-	} else {
+	default:
 		// Non-DXT: LZSS (signed checksum, lenient).
 		dec, err := lzss.Decompress(payload, expectedRaw, lzss.SignedLenientOptions())
 		if err != nil {

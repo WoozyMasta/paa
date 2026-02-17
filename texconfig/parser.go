@@ -1,7 +1,13 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 package texconfig
 
 import (
+	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -83,7 +89,7 @@ func buildTexConvertConfig(cfg *cfgFile) (TexConvertConfig, error) {
 		}
 	}
 	if hintsClass == nil {
-		return TexConvertConfig{}, fmt.Errorf("TextureHints class not found")
+		return TexConvertConfig{}, errors.New("TextureHints class not found")
 	}
 
 	// Create a map of class names to classes for efficient lookup.
@@ -118,14 +124,10 @@ func buildTexConvertConfig(cfg *cfgFile) (TexConvertConfig, error) {
 				return nil, err
 			}
 
-			for k, v := range baseProps {
-				props[k] = v
-			}
+			maps.Copy(props, baseProps)
 		}
 
-		for k, v := range c.Props {
-			props[k] = v
-		}
+		maps.Copy(props, c.Props)
 
 		stack[c.Name] = false
 		memo[c.Name] = props
@@ -299,7 +301,7 @@ func cfgBool(v cfgValue) (bool, error) {
 		}
 
 	default:
-		return false, fmt.Errorf("invalid bool value")
+		return false, errors.New("invalid bool value")
 	}
 }
 
@@ -313,7 +315,7 @@ func cfgInt(v cfgValue) (int, error) {
 	case cfgString:
 		return strconv.Atoi(v.Str)
 	default:
-		return 0, fmt.Errorf("invalid int value")
+		return 0, errors.New("invalid int value")
 	}
 }
 

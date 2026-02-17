@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 package paa
 
 import (
@@ -242,10 +246,7 @@ func autoReduceIfNeeded(img image.Image, hint texconfig.TextureHint, cfg texconf
 		return img
 	}
 
-	maxDim := b.Dx()
-	if b.Dy() > maxDim {
-		maxDim = b.Dy()
-	}
+	maxDim := max(b.Dy(), b.Dx())
 	if maxDim <= hint.LimitSize {
 		return img
 	}

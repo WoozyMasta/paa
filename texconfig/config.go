@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 /*
 Package texconfig implements TexConvert.cfg-compatible configuration for PAA encoding.
 
@@ -67,7 +71,7 @@ type TextureHint struct {
 	Pattern string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
 
 	// Swizzle describes the channel remap to apply before encoding.
-	Swizzle ChannelSwizzle `json:"swizzle,omitempty" yaml:"swizzle,omitempty"`
+	Swizzle ChannelSwizzle `json:"swizzle" yaml:"swizzle"`
 
 	// Format is the requested encoder format (TexFormDefault enum).
 	Format TexFormat `json:"format,omitempty" yaml:"format,omitempty"`

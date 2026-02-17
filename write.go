@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 package paa
 
 import (
@@ -21,67 +25,22 @@ func Encode(w io.Writer, img image.Image) error {
 
 // EncodeWithOptions writes the image as PAA with a single mip level.
 // If opts is nil, behavior is the same as Encode (auto DXT1/DXT5 by alpha).
-// If opts.NormalMapSwizzle is true, swizzleNormalMap is applied first and format is DXT5 (for _nohq).
+// If opts.NormalMapSwizzle is true, normal-map swizzle is applied per mip and format is DXT5 (for _nohq).
 // If opts.Type is set (e.g. PaxDXT1, PaxDXT5), that format is used; otherwise format is chosen by alpha.
 func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error {
 	statImg := img
-	if opts != nil && opts.NormalMapSwizzle {
-		img = swizzleNormalMap(img)
-	}
 
-	bounds := img.Bounds()
-	width, height := bounds.Dx(), bounds.Dy()
-
-	var avgR, avgG, avgB, avgA uint64
-	var maxR, maxG, maxB, maxA uint8
-	hasAlpha := false
-
-	// Calculate AVG and MAX colors.
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			c := color.NRGBAModel.Convert(statImg.At(x, y)).(color.NRGBA)
-			r8, g8, b8, a8 := c.R, c.G, c.B, c.A
-
-			if a8 < 255 {
-				hasAlpha = true
-			}
-
-			avgR += uint64(r8)
-			avgG += uint64(g8)
-			avgB += uint64(b8)
-			avgA += uint64(a8)
-
-			if r8 > maxR {
-				maxR = r8
-			}
-			if g8 > maxG {
-				maxG = g8
-			}
-			if b8 > maxB {
-				maxB = b8
-			}
-			if a8 > maxA {
-				maxA = a8
-			}
-		}
-	}
-
-	pixelCount := uint64(width) * uint64(height) //nolint:gosec // bounds are non-negative
-	if pixelCount > 0 {
-		avgR /= pixelCount
-		avgG /= pixelCount
-		avgB /= pixelCount
-		avgA /= pixelCount
-	}
+	avgR, avgG, avgB, avgA, maxR, maxG, maxB, maxA, hasAlpha := imageStats(statImg)
 
 	var paxType PaxType
-	if opts != nil && opts.Type != 0 {
+	switch {
+	case opts != nil && opts.Type != 0:
 		paxType = opts.Type
-	} else if opts != nil && opts.NormalMapSwizzle {
+	case opts != nil && opts.NormalMapSwizzle:
 		paxType = PaxDXT5
-	} else if hasAlpha {
+	case hasAlpha:
 		paxType = PaxDXT5
-	} else {
+	default:
 		paxType = PaxDXT1
 	}
 
@@ -346,7 +305,14 @@ func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error 
 
 		// Data length is stored as-is, no LZO flag.
 		dLen := len(m.data)
-		if _, err := w.Write([]byte{byte(dLen), byte(dLen >> 8), byte(dLen >> 16)}); err != nil {
+		if dLen > 0xFFFFFF {
+			return ErrMipDataTooLarge
+		}
+
+		var dLenBuf [4]byte
+		// #nosec G115 -- dLen is range-checked to 24-bit above.
+		binary.LittleEndian.PutUint32(dLenBuf[:], uint32(dLen))
+		if _, err := w.Write(dLenBuf[:3]); err != nil {
 			return err
 		}
 
@@ -361,4 +327,103 @@ func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error 
 	}
 
 	return nil
+}
+
+// imageStats calculates per-image average and maximum channel values.
+func imageStats(img image.Image) (avgR, avgG, avgB, avgA uint64, maxR, maxG, maxB, maxA uint8, hasAlpha bool) {
+	if nrgba, ok := img.(*image.NRGBA); ok {
+		return nrgbaImageStats(nrgba)
+	}
+
+	bounds := img.Bounds()
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			c := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+			r8, g8, b8, a8 := c.R, c.G, c.B, c.A
+
+			if a8 < 255 {
+				hasAlpha = true
+			}
+
+			avgR += uint64(r8)
+			avgG += uint64(g8)
+			avgB += uint64(b8)
+			avgA += uint64(a8)
+
+			if r8 > maxR {
+				maxR = r8
+			}
+			if g8 > maxG {
+				maxG = g8
+			}
+			if b8 > maxB {
+				maxB = b8
+			}
+			if a8 > maxA {
+				maxA = a8
+			}
+		}
+	}
+
+	pixelCount := uint64(bounds.Dx()) * uint64(bounds.Dy()) //nolint:gosec // bounds are non-negative
+	if pixelCount > 0 {
+		avgR /= pixelCount
+		avgG /= pixelCount
+		avgB /= pixelCount
+		avgA /= pixelCount
+	}
+
+	return avgR, avgG, avgB, avgA, maxR, maxG, maxB, maxA, hasAlpha
+}
+
+// nrgbaImageStats is a zero-allocation fast path for *image.NRGBA input.
+func nrgbaImageStats(img *image.NRGBA) (avgR, avgG, avgB, avgA uint64, maxR, maxG, maxB, maxA uint8, hasAlpha bool) {
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return 0, 0, 0, 0, 0, 0, 0, 0, false
+	}
+
+	rowOffsetX := (bounds.Min.X - img.Rect.Min.X) * 4
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		rowStart := (y-img.Rect.Min.Y)*img.Stride + rowOffsetX
+		row := img.Pix[rowStart : rowStart+width*4]
+
+		for i := 0; i < len(row); i += 4 {
+			r8, g8, b8, a8 := row[i], row[i+1], row[i+2], row[i+3]
+
+			if a8 < 255 {
+				hasAlpha = true
+			}
+
+			avgR += uint64(r8)
+			avgG += uint64(g8)
+			avgB += uint64(b8)
+			avgA += uint64(a8)
+
+			if r8 > maxR {
+				maxR = r8
+			}
+			if g8 > maxG {
+				maxG = g8
+			}
+			if b8 > maxB {
+				maxB = b8
+			}
+			if a8 > maxA {
+				maxA = a8
+			}
+		}
+	}
+
+	pixelCount := uint64(width) * uint64(height) //nolint:gosec // bounds are non-negative
+	avgR /= pixelCount
+	avgG /= pixelCount
+	avgB /= pixelCount
+	avgA /= pixelCount
+
+	return avgR, avgG, avgB, avgA, maxR, maxG, maxB, maxA, hasAlpha
 }

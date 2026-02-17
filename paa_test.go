@@ -101,6 +101,154 @@ func TestDecodeConfig(t *testing.T) {
 	}
 }
 
+func TestDecodeAndConfigUseFirstMipOnly(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
+	for y := 0; y < 64; y++ {
+		for x := 0; x < 64; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x), G: uint8(y), B: 128, A: 255})
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := EncodeWithOptions(&buf, img, nil); err != nil {
+		t.Fatalf("EncodeWithOptions: %v", err)
+	}
+
+	data := buf.Bytes()
+	taggs := parseTagg(data)
+	if got := countNonZeroOffsets(taggs); got < 2 {
+		t.Fatalf("expected mip chain with at least 2 levels, got %d", got)
+	}
+
+	off := firstMipOffset(taggs)
+	if off == 0 || off+7 > len(data) {
+		t.Fatalf("invalid first mip offset")
+	}
+
+	size := int(data[off+4]) | int(data[off+5])<<8 | int(data[off+6])<<16
+	end := off + 7 + size
+	if end > len(data) {
+		t.Fatalf("first mip exceeds file bounds")
+	}
+
+	truncated := append([]byte(nil), data[:end]...)
+
+	decoded, err := Decode(bytes.NewReader(truncated))
+	if err != nil {
+		t.Fatalf("Decode(truncated): %v", err)
+	}
+	if decoded.Bounds().Dx() != 64 || decoded.Bounds().Dy() != 64 {
+		t.Fatalf("decoded size = %dx%d, want 64x64", decoded.Bounds().Dx(), decoded.Bounds().Dy())
+	}
+
+	cfg, err := DecodeConfig(bytes.NewReader(truncated))
+	if err != nil {
+		t.Fatalf("DecodeConfig(truncated): %v", err)
+	}
+	if cfg.Width != 64 || cfg.Height != 64 {
+		t.Fatalf("config size = %dx%d, want 64x64", cfg.Width, cfg.Height)
+	}
+}
+
+func TestToDDSPreservesMipmaps(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 32, 32))
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 32; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x * 8), G: uint8(y * 8), B: 128, A: uint8((x + y) & 0xFF)})
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := EncodeWithOptions(&buf, img, &EncodeOptions{Type: PaxDXT5}); err != nil {
+		t.Fatalf("EncodeWithOptions: %v", err)
+	}
+
+	p, err := DecodePAA(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("DecodePAA: %v", err)
+	}
+
+	dds, err := p.ToDDS()
+	if err != nil {
+		t.Fatalf("ToDDS: %v", err)
+	}
+
+	if dds.Format != bcn.FormatDXT5 {
+		t.Fatalf("DDS format = %v, want %v", dds.Format, bcn.FormatDXT5)
+	}
+	if len(dds.Faces) != 1 {
+		t.Fatalf("DDS faces = %d, want 1", len(dds.Faces))
+	}
+	if len(dds.Faces[0].Mipmaps) != len(p.MipMaps) {
+		t.Fatalf("DDS mipmaps = %d, want %d", len(dds.Faces[0].Mipmaps), len(p.MipMaps))
+	}
+
+	for i := range p.MipMaps {
+		if !bytes.Equal(dds.Faces[0].Mipmaps[i], p.MipMaps[i].Data) {
+			t.Fatalf("mipmap[%d] payload differs", i)
+		}
+	}
+}
+
+func TestToKTXPreservesMipmaps(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 32, 32))
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 32; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x * 8), G: uint8(y * 8), B: 128, A: uint8((x + y) & 0xFF)})
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := EncodeWithOptions(&buf, img, &EncodeOptions{Type: PaxDXT5}); err != nil {
+		t.Fatalf("EncodeWithOptions: %v", err)
+	}
+
+	p, err := DecodePAA(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("DecodePAA: %v", err)
+	}
+
+	ktx, err := p.ToKTX()
+	if err != nil {
+		t.Fatalf("ToKTX: %v", err)
+	}
+
+	if ktx.Format != bcn.FormatDXT5 {
+		t.Fatalf("KTX format = %v, want %v", ktx.Format, bcn.FormatDXT5)
+	}
+	if len(ktx.Faces) != 1 {
+		t.Fatalf("KTX faces = %d, want 1", len(ktx.Faces))
+	}
+	if len(ktx.Faces[0].Mipmaps) != len(p.MipMaps) {
+		t.Fatalf("KTX mipmaps = %d, want %d", len(ktx.Faces[0].Mipmaps), len(p.MipMaps))
+	}
+
+	for i := range p.MipMaps {
+		if !bytes.Equal(ktx.Faces[0].Mipmaps[i], p.MipMaps[i].Data) {
+			t.Fatalf("mipmap[%d] payload differs", i)
+		}
+	}
+
+	var out bytes.Buffer
+	if err := ktx.Write(&out); err != nil {
+		t.Fatalf("KTX Write: %v", err)
+	}
+
+	readKTX, err := bcn.ReadKTX(bytes.NewReader(out.Bytes()))
+	if err != nil {
+		t.Fatalf("ReadKTX: %v", err)
+	}
+	if len(readKTX.Faces) != 1 || len(readKTX.Faces[0].Mipmaps) != len(p.MipMaps) {
+		t.Fatalf("read KTX shape mismatch")
+	}
+
+	for i := range p.MipMaps {
+		if !bytes.Equal(readKTX.Faces[0].Mipmaps[i], p.MipMaps[i].Data) {
+			t.Fatalf("read mipmap[%d] payload differs", i)
+		}
+	}
+}
+
 func TestDecodePAA_InvalidMagic(t *testing.T) {
 	_, err := DecodePAA(bytes.NewReader([]byte{0, 0}))
 	if err == nil {
@@ -257,6 +405,10 @@ func TestDecodeMasksLZOWidthBit(t *testing.T) {
 }
 
 func TestRoundTripHeadersFromPAAFiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping fixture round-trip headers test in short mode")
+	}
+
 	entries, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatalf("read testdata: %v", err)

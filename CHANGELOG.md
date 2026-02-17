@@ -13,6 +13,36 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [0.2.0][] - 2026-02-17
+
+### Added
+
+* `DecodeToDDS`/`DecodeToKTX` and `(*PAA).ToDDS`/`(*PAA).ToKTX` helpers for
+  direct `PAA -> DDS/KTX` conversion with preserved mipmap chain
+  (DXT-based PAA types).
+* Main-flow I/O benchmarks (`BenchmarkMainFlowEncode`,
+  `BenchmarkMainFlowDecode`, `BenchmarkMainFlowRoundTrip`).
+
+### Changed
+
+* Updated `github.com/woozymasta/lzo` to `v0.2.0`.
+* `lzo v0.2.0` no longer includes legacy GPLv2 code
+  and is distributed under MIT.
+* Project licensing constraints are now MIT-only;
+  previous GPLv2-related limitation is removed.
+* LZO performance improved in `v0.2.0`: compression is up to 2x faster and
+  decompression is about 4-8x faster (depending on usage pattern).
+* DXT mip decode now uses `lzo.DecompressNInto` with preallocated output
+  buffers and strict full-input-consumption validation.
+* `Decode`/`DecodeWithOptions` now read and decode only the first mip level
+  instead of decoding all mipmaps.
+* `DecodeConfig` now reads only the first mip header instead of scanning
+  all mip payload metadata.
+* `EncodeWithOptions` image stats pass now has a zero-allocation fast path
+  for `*image.NRGBA`, significantly reducing allocations in encode flow.
+
+[0.2.0]: https://github.com/WoozyMasta/paa/compare/v0.1.2...v0.2.0
+
 ## [0.1.2][] - 2026-02-08
 
 ### Added

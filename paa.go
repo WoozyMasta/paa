@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 /*
 Package paa reads and writes PAA (Arma/DayZ) texture files.
 

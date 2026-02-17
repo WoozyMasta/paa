@@ -1,7 +1,13 @@
-// Package img registers the PAA image format with the standard image package.
-// Import it with a blank import to enable image.Decode and image.DecodeConfig for PAA:
-//
-//	import _ "github.com/woozymasta/paa/img"
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
+/*
+Package img registers the PAA image format with the standard image package.
+Import it with a blank import to enable image.Decode and image.DecodeConfig for PAA:
+
+	import _ "github.com/woozymasta/paa/img"
+*/
 package img
 
 import (

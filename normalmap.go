@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 package paa
 
 import (
@@ -165,7 +169,7 @@ func applySwizzlePayload(img image.Image, tag [4]byte) *image.NRGBA {
 			so := srow + x*4
 			do := drow + x*4
 
-			for i := 0; i < 4; i++ {
+			for i := range 4 {
 				t := tag[i]
 				var v uint8
 				if (t & 0x08) != 0 {

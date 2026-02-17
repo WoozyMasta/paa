@@ -1,6 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 package texconfig
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -95,7 +100,7 @@ func (l *lexer) next() (token, error) {
 			c := l.src[l.pos]
 			if c == '\\' {
 				if l.pos+1 >= len(l.src) {
-					return token{}, fmt.Errorf("unterminated escape in string")
+					return token{}, errors.New("unterminated escape in string")
 				}
 
 				next := l.src[l.pos+1]
@@ -114,7 +119,7 @@ func (l *lexer) next() (token, error) {
 			l.pos++
 		}
 
-		return token{}, fmt.Errorf("unterminated string")
+		return token{}, errors.New("unterminated string")
 	}
 
 	// symbols
@@ -205,7 +210,7 @@ func (l *lexer) skipSpaceAndComments() error {
 
 				// Check if the block comment is unterminated.
 				if l.pos >= len(l.src) {
-					return fmt.Errorf("unterminated block comment")
+					return errors.New("unterminated block comment")
 				}
 
 				continue

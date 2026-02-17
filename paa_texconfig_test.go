@@ -14,6 +14,10 @@ import (
 )
 
 func TestTexConfigHeadersFromPNG(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping texconfig header fixture test in short mode")
+	}
+
 	cfg, cfgErr := texconfig.DefaultTexConvertConfig()
 	if cfgErr != nil {
 		t.Fatalf("default texconfig: %v", cfgErr)

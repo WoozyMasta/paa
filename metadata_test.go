@@ -11,6 +11,9 @@ import (
 
 func TestDecodeMetadata_ParityWithDecodePAA_Fixtures(t *testing.T) {
 	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping fixture parity test in short mode")
+	}
 
 	entries, err := os.ReadDir("testdata")
 	if err != nil {

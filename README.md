@@ -38,6 +38,37 @@ img, err := p.MipMaps[0].Image()
 err = paa.Encode(w, img)
 ```
 
+### PAA -> DDS/KTX (preserve mipmaps)
+
+If you need DDS/KTX with the original mip chain (without re-generating mipmaps),
+use full PAA decode and convert:
+
+```go
+import (
+  "github.com/woozymasta/paa"
+)
+
+p, err := paa.DecodePAA(r)
+dds, err := p.ToDDS()
+err = dds.Write(w)
+
+ktx, err := p.ToKTX()
+err = ktx.Write(w)
+```
+
+Or use a single-step helper:
+
+```go
+dds, err := paa.DecodeToDDS(r)
+err = dds.Write(w)
+
+ktx, err := paa.DecodeToKTX(r)
+err = ktx.Write(w)
+```
+
+> [!NOTE]  
+> direct conversion supports DXT-based PAA types.
+
 ### TexConvert.cfg‑style encoding
 
 Use `texconfig` to resolve filename hints and apply swizzle/format rules:

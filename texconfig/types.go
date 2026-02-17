@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 package texconfig
 
 import (
@@ -324,8 +328,8 @@ func ParseSwizzleExpr(s string) (SwizzleExpr, error) {
 		return SwizzleExpr{Valid: true, IsConst: true, ConstValue: 255}, nil
 	}
 
-	if strings.HasPrefix(upper, "1-") {
-		src, ok := parseSwizzleSource(strings.TrimPrefix(upper, "1-"))
+	if rest, ok := strings.CutPrefix(upper, "1-"); ok {
+		src, ok := parseSwizzleSource(rest)
 		if !ok {
 			return SwizzleExpr{}, fmt.Errorf("unknown swizzle source in %q", raw)
 		}
@@ -431,10 +435,10 @@ func channelValue(src SwizzleSource, r, g, b, a byte) byte {
 
 // ChannelSwizzle maps output channels to input expressions.
 type ChannelSwizzle struct {
-	R SwizzleExpr `json:"r,omitempty" yaml:"r,omitempty"` // R channel expression.
-	G SwizzleExpr `json:"g,omitempty" yaml:"g,omitempty"` // G channel expression.
-	B SwizzleExpr `json:"b,omitempty" yaml:"b,omitempty"` // B channel expression.
-	A SwizzleExpr `json:"a,omitempty" yaml:"a,omitempty"` // A channel expression.
+	R SwizzleExpr `json:"r" yaml:"r"` // R channel expression.
+	G SwizzleExpr `json:"g" yaml:"g"` // G channel expression.
+	B SwizzleExpr `json:"b" yaml:"b"` // B channel expression.
+	A SwizzleExpr `json:"a" yaml:"a"` // A channel expression.
 }
 
 // IsIdentity reports whether the swizzle is an identity.

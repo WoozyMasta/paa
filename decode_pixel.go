@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/paa
+
 package paa
 
 import (
@@ -18,7 +22,7 @@ func decodePixelFormat(format PaxType, rawData []byte, width, height int, img *i
 			return ErrInsufficientData
 		}
 
-		for i := 0; i < totalPixels; i++ {
+		for i := range totalPixels {
 			off := i * 4
 			img.Pix[off+0] = rawData[off+2] // B -> R
 			img.Pix[off+1] = rawData[off+1] // G
@@ -61,7 +65,7 @@ func decodePixelFormat(format PaxType, rawData []byte, width, height int, img *i
 			return ErrInsufficientData
 		}
 
-		for i := 0; i < totalPixels; i++ {
+		for i := range totalPixels {
 			off := i * 2
 			v := rawData[off+0]
 			a := rawData[off+1]
