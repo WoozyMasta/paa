@@ -24,8 +24,10 @@ var (
 	mainFlowFixture    *mainFlowBenchFixture
 	mainFlowFixtureErr error
 
-	mainFlowSinkImage image.Image
-	mainFlowSinkSize  int
+	mainFlowSinkImage           image.Image
+	mainFlowSinkSize            int
+	mainFlowSinkMetadata        *Metadata
+	mainFlowSinkMetadataHeaders *MetadataHeaders
 )
 
 func buildMainFlowBenchFixture() (*mainFlowBenchFixture, error) {
@@ -135,4 +137,68 @@ func BenchmarkMainFlowRoundTrip(b *testing.B) {
 		mainFlowSinkImage = img
 		mainFlowSinkSize = buf.Len()
 	}
+}
+
+func BenchmarkMainFlowMetadataDecode(b *testing.B) {
+	f := requireMainFlowBenchFixture(b)
+
+	b.Run("Full", func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(int64(len(f.encodedPAA)))
+		b.ResetTimer()
+
+		for range b.N {
+			meta, err := DecodeMetadata(bytes.NewReader(f.encodedPAA))
+			if err != nil {
+				b.Fatalf("decode metadata: %v", err)
+			}
+
+			mainFlowSinkMetadata = meta
+		}
+	})
+
+	b.Run("Headers", func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(int64(len(f.encodedPAA)))
+		b.ResetTimer()
+
+		for range b.N {
+			meta, err := DecodeMetadataHeaders(bytes.NewReader(f.encodedPAA))
+			if err != nil {
+				b.Fatalf("decode metadata headers: %v", err)
+			}
+
+			mainFlowSinkMetadataHeaders = meta
+		}
+	})
+
+	b.Run("FullBytes", func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(int64(len(f.encodedPAA)))
+		b.ResetTimer()
+
+		for range b.N {
+			meta, err := DecodeMetadataBytes(f.encodedPAA)
+			if err != nil {
+				b.Fatalf("decode metadata bytes: %v", err)
+			}
+
+			mainFlowSinkMetadata = meta
+		}
+	})
+
+	b.Run("HeadersBytes", func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(int64(len(f.encodedPAA)))
+		b.ResetTimer()
+
+		for range b.N {
+			meta, err := DecodeMetadataHeadersBytes(f.encodedPAA)
+			if err != nil {
+				b.Fatalf("decode metadata headers bytes: %v", err)
+			}
+
+			mainFlowSinkMetadataHeaders = meta
+		}
+	})
 }
