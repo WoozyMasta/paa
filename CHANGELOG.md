@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [0.2.1][] - 2026-02-17
+
+### Changed
+
+* Updated `github.com/woozymasta/lzss` to `v0.1.4`.
+* Inherited LZSS decode/encode performance improvements from `lzss v0.1.4`,
+  including reduced allocations in core paths only for Non-DXT PAA.
+
+[0.2.1]: https://github.com/WoozyMasta/paa/compare/v0.2.0...v0.2.1
+
 ## [0.2.0][] - 2026-02-17
 
 ### Added
