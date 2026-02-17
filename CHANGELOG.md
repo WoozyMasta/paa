@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning][].
 
 ## Unreleased
 
+### Added
+
+* `DecodeMetadataHeaders` / `DecodeMetadataHeadersBytes` for fast
+  metadata-only reads (`Type`, `MipHeaders`, `CGVA`, `CXAM`, `GALF`)
+  without keeping full GGAT map.
+* `DecodeMetadataBytes` helper for zero-copy friendly in-memory metadata decode.
+* `EncodeWithOptionsAndMetadataHeaders` for one-pass encode + compact metadata
+  collection (no second decode pass of generated PAA).
+
 ### Changed
 
 * `texconfig` parse/validation sentinel errors are now centralized in

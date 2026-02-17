@@ -38,6 +38,26 @@ img, err := p.MipMaps[0].Image()
 err = paa.Encode(w, img)
 ```
 
+### Metadata-only fast path
+
+If you only need texture headers/tags (for example, building `texheaders`)
+without decoding mip payloads, use metadata helpers:
+
+```go
+meta, err := paa.DecodeMetadata(r)          // full GGAT map + mip headers
+headers, err := paa.DecodeMetadataHeaders(r) // Type + mip headers + CGVA/CXAM/GALF only
+
+meta2, err := paa.DecodeMetadataBytes(data)
+headers2, err := paa.DecodeMetadataHeadersBytes(data)
+```
+
+For on-the-fly encode pipelines, you can collect compact metadata in the same
+encode pass (without reading the generated PAA again):
+
+```go
+headers, err := paa.EncodeWithOptionsAndMetadataHeaders(w, img, opts)
+```
+
 ### PAA -> DDS/KTX (preserve mipmaps)
 
 If you need DDS/KTX with the original mip chain (without re-generating mipmaps),

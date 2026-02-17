@@ -28,6 +28,22 @@ func Encode(w io.Writer, img image.Image) error {
 // If opts.NormalMapSwizzle is true, normal-map swizzle is applied per mip and format is DXT5 (for _nohq).
 // If opts.Type is set (e.g. PaxDXT1, PaxDXT5), that format is used; otherwise format is chosen by alpha.
 func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error {
+	return encodeWithOptions(w, img, opts, nil)
+}
+
+// EncodeWithOptionsAndMetadataHeaders writes the image as PAA and returns
+// compact metadata headers collected during the same encode pass.
+func EncodeWithOptionsAndMetadataHeaders(w io.Writer, img image.Image, opts *EncodeOptions) (*MetadataHeaders, error) {
+	meta := &MetadataHeaders{}
+	if err := encodeWithOptions(w, img, opts, meta); err != nil {
+		return nil, err
+	}
+
+	return meta, nil
+}
+
+// encodeWithOptions performs the full encode flow and optionally fills metadata.
+func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *MetadataHeaders) error {
 	statImg := img
 
 	avgR, avgG, avgB, avgA, maxR, maxG, maxB, maxA, hasAlpha := imageStats(statImg)
@@ -42,6 +58,12 @@ func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error 
 		paxType = PaxDXT5
 	default:
 		paxType = PaxDXT1
+	}
+	if meta != nil {
+		*meta = MetadataHeaders{
+			Type:       paxType,
+			MipHeaders: make([]MipHeader, 0, 16),
+		}
 	}
 
 	var compressedData []byte
@@ -230,15 +252,27 @@ func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error 
 		maxR, maxG, maxB, maxA = 255, 255, 255, 255
 	}
 
-	if err := writeTag("CGVA", []byte{uint8(avgB), uint8(avgG), uint8(avgR), uint8(avgA)}); err != nil { //nolint:gosec // G115
+	avgTag := [4]byte{uint8(avgB), uint8(avgG), uint8(avgR), uint8(avgA)} //nolint:gosec // stats are uint8-range by construction.
+	maxTag := [4]byte{maxB, maxG, maxR, maxA}
+	if meta != nil {
+		meta.HasAverageColor = true
+		meta.AverageColor = avgTag
+		meta.HasMaxColor = true
+		meta.MaxColor = maxTag
+	}
+	if err := writeTag("CGVA", avgTag[:]); err != nil {
 		return err
 	}
-	if err := writeTag("CXAM", []byte{maxB, maxG, maxR, maxA}); err != nil {
+	if err := writeTag("CXAM", maxTag[:]); err != nil {
 		return err
 	}
 
 	// Write optional GALF and ZIWS tags.
 	if writeGALF {
+		if meta != nil {
+			meta.HasGALF = true
+			meta.GALF = uint32(galfValue)
+		}
 		if err := writeTag("GALF", []byte{galfValue, 0, 0, 0}); err != nil {
 			return err
 		}
@@ -266,6 +300,31 @@ func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error 
 	for i := 0; i < len(mips) && i < 16; i++ {
 		binary.LittleEndian.PutUint32(sffo[i*4:i*4+4], uint32(off)) //nolint:gosec // G115
 		off += 2 + 2 + 3 + len(mips[i].data)
+	}
+	if meta != nil {
+		offsets, err := sffoOffsetsRaw(sffo)
+		if err != nil {
+			return err
+		}
+
+		for i, offset := range offsets {
+			if i >= len(mips) {
+				break
+			}
+			if mips[i].w < 0 || mips[i].w > 0xFFFF || mips[i].h < 0 || mips[i].h > 0xFFFF {
+				return ErrInvalidDimensions
+			}
+			// #nosec G115 -- dimensions are range-checked to uint16 bounds above.
+			w16 := uint16(mips[i].w)
+			// #nosec G115 -- dimensions are range-checked to uint16 bounds above.
+			h16 := uint16(mips[i].h)
+
+			meta.MipHeaders = append(meta.MipHeaders, MipHeader{
+				Offset: offset,
+				Width:  w16,
+				Height: h16,
+			})
+		}
 	}
 	if err := writeTag("SFFO", sffo); err != nil {
 		return err

@@ -351,6 +351,58 @@ func TestMipChainDefaults(t *testing.T) {
 	}
 }
 
+func TestEncodeWithOptionsAndMetadataHeadersParity(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 32, 32))
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 32; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{
+				R: uint8(x * 7),
+				G: uint8(y * 9),
+				B: 160,
+				A: 255,
+			})
+		}
+	}
+
+	opts := &EncodeOptions{
+		Type:      PaxDXT5,
+		WriteGALF: true,
+		GALFValue: 3,
+	}
+
+	var buf bytes.Buffer
+	metaFromEncode, err := EncodeWithOptionsAndMetadataHeaders(&buf, img, opts)
+	if err != nil {
+		t.Fatalf("EncodeWithOptionsAndMetadataHeaders: %v", err)
+	}
+
+	metaFromDecode, err := DecodeMetadataHeaders(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("DecodeMetadataHeaders: %v", err)
+	}
+
+	if metaFromEncode.Type != metaFromDecode.Type {
+		t.Fatalf("type mismatch: encode=%d decode=%d", metaFromEncode.Type, metaFromDecode.Type)
+	}
+	if metaFromEncode.HasAverageColor != metaFromDecode.HasAverageColor || metaFromEncode.AverageColor != metaFromDecode.AverageColor {
+		t.Fatalf("CGVA mismatch: encode=%v decode=%v", metaFromEncode.AverageColor, metaFromDecode.AverageColor)
+	}
+	if metaFromEncode.HasMaxColor != metaFromDecode.HasMaxColor || metaFromEncode.MaxColor != metaFromDecode.MaxColor {
+		t.Fatalf("CXAM mismatch: encode=%v decode=%v", metaFromEncode.MaxColor, metaFromDecode.MaxColor)
+	}
+	if metaFromEncode.HasGALF != metaFromDecode.HasGALF || metaFromEncode.GALF != metaFromDecode.GALF {
+		t.Fatalf("GALF mismatch: encode=(%v,%d) decode=(%v,%d)", metaFromEncode.HasGALF, metaFromEncode.GALF, metaFromDecode.HasGALF, metaFromDecode.GALF)
+	}
+	if len(metaFromEncode.MipHeaders) != len(metaFromDecode.MipHeaders) {
+		t.Fatalf("mipmap count mismatch: encode=%d decode=%d", len(metaFromEncode.MipHeaders), len(metaFromDecode.MipHeaders))
+	}
+	for i := range metaFromEncode.MipHeaders {
+		if metaFromEncode.MipHeaders[i] != metaFromDecode.MipHeaders[i] {
+			t.Fatalf("mipmap[%d] mismatch: encode=%+v decode=%+v", i, metaFromEncode.MipHeaders[i], metaFromDecode.MipHeaders[i])
+		}
+	}
+}
+
 func TestPerMipLZOFlag(t *testing.T) {
 	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
 	for i := range img.Pix {

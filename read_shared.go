@@ -77,12 +77,18 @@ func readGGATTags(r io.Reader) (map[string][]byte, error) {
 }
 
 // sffoOffsets returns non-zero offsets from SFFO tag.
+// SFFO is the PAA mip offset table tag ("OFFS", offset list).
 func sffoOffsets(tags map[string][]byte) ([]uint32, error) {
 	sffo, ok := tags["SFFO"]
 	if !ok {
 		return nil, ErrMissingSFFO
 	}
 
+	return sffoOffsetsRaw(sffo)
+}
+
+// sffoOffsetsRaw returns non-zero offsets from raw SFFO payload.
+func sffoOffsetsRaw(sffo []byte) ([]uint32, error) {
 	out := make([]uint32, 0, len(sffo)/4)
 	for i := 0; i+4 <= len(sffo); i += 4 {
 		v := binary.LittleEndian.Uint32(sffo[i : i+4])
