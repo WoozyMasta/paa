@@ -32,10 +32,7 @@ func resolveDecodeBCnOptions(opts *DecodeOptions) *bcn.DecodeOptions {
 		return opts.BCn
 	}
 
-	workers := runtime.GOMAXPROCS(0)
-	if workers > defaultDecodeWorkers {
-		workers = defaultDecodeWorkers
-	}
+	workers := min(runtime.GOMAXPROCS(0), defaultDecodeWorkers)
 
 	out := bcn.DecodeOptions{Workers: workers}
 	if opts != nil && opts.BCn != nil {
