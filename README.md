@@ -126,3 +126,20 @@ opts := &paa.EncodeOptions{
 }
 err := paa.EncodeWithOptions(w, img, opts)
 ```
+
+## Concurrency and performance
+
+Block (de)compression is parallelized across workers (default: `GOMAXPROCS`),
+controlled by `Workers` in the BCn encode/decode options.
+A few rules of thumb:
+
+* **Single texture, lowest latency:** keep the default (auto).
+  Encode scales well up to the number of physical cores;
+  beyond that (SMT threads) the gains are small.
+* **Decoding:** decode is dominated by LZO decompression and memory traffic,
+  so block parallelism helps little and can slightly regress with many workers.
+  Keep `DecodeOptions.BCn.Workers` low (e.g. `1`–`4`).
+* **Batch / many files:** prefer parallelism at the *file* level
+  (one goroutine per file) with `Workers: 1` per call.
+  Per-image scaling is sublinear, so spreading cores across files
+  gives much higher total throughput than per-image parallelism.
