@@ -137,8 +137,10 @@ A few rules of thumb:
   Encode scales well up to the number of physical cores;
   beyond that (SMT threads) the gains are small.
 * **Decoding:** decode is dominated by LZO decompression and memory traffic,
-  so block parallelism helps little and can slightly regress with many workers.
-  Keep `DecodeOptions.BCn.Workers` low (e.g. `1`–`4`).
+  so block parallelism helps little and regresses past ~4 workers.
+  The default is already capped at `min(GOMAXPROCS, 4)`;
+  set `DecodeOptions.BCn.Workers` explicitly only to override it
+  (e.g. `1` for batch).
 * **Batch / many files:** prefer parallelism at the *file* level
   (one goroutine per file) with `Workers: 1` per call.
   Per-image scaling is sublinear, so spreading cores across files

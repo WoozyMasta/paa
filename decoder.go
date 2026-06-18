@@ -164,10 +164,7 @@ func (d *Decoder) readMipImage(r io.Reader, paxType PaxType, opts *DecodeOptions
 			return nil, false, ErrUnsupportedPixelFmt
 		}
 
-		var bcnOpts *bcn.DecodeOptions
-		if opts != nil && opts.BCn != nil {
-			bcnOpts = opts.BCn
-		}
+		bcnOpts := resolveDecodeBCnOptions(opts)
 
 		img, derr := bcn.DecodeImageInto(d.img, raw, width, height, bf, bcnOpts)
 		if derr != nil {

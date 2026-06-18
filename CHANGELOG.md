@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning][].
   with significantly fewer allocations; output is unchanged.
   Reusing an `Encoder` or `Decoder` removes almost all
   remaining per-image allocations.
+* Decode now uses at most 4 BCn worker threads by default
+  (its LZO step is serial, so more workers only added overhead);
+  override with `DecodeOptions.BCn.Workers`.
 * Updated `bcn` to `v0.5.0`, `lzo` to `v0.3.0`, `lzss` to `v0.2.0`.
 
 ### Security

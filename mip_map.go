@@ -10,11 +10,41 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"runtime"
 
 	"github.com/woozymasta/bcn"
 	"github.com/woozymasta/lzo"
 	"github.com/woozymasta/lzss"
 )
+
+// defaultDecodeWorkers caps the BCn decode worker count when the caller does not set one.
+// PAA decode is dominated by the serial LZO step,
+// so beyond ~4 workers the block-decode parallelism is outweighed by worker-pool overhead
+// and decode gets slower; 4 is the measured sweet spot on many-core CPUs.
+const defaultDecodeWorkers = 4
+
+// resolveDecodeBCnOptions returns the BCn decode options to use,
+// applying the default worker cap (min(GOMAXPROCS, defaultDecodeWorkers))
+// when the caller did not request a specific worker count.
+// An explicit non-zero Workers is respected.
+func resolveDecodeBCnOptions(opts *DecodeOptions) *bcn.DecodeOptions {
+	if opts != nil && opts.BCn != nil && opts.BCn.Workers != 0 {
+		return opts.BCn
+	}
+
+	workers := runtime.GOMAXPROCS(0)
+	if workers > defaultDecodeWorkers {
+		workers = defaultDecodeWorkers
+	}
+
+	out := bcn.DecodeOptions{Workers: workers}
+	if opts != nil && opts.BCn != nil {
+		out = *opts.BCn
+		out.Workers = workers
+	}
+
+	return &out
+}
 
 // MipMap holds one mip level: dimensions and raw decoded pixel/block data.
 type MipMap struct {
@@ -151,10 +181,7 @@ func (m *MipMap) ImageWithOptions(opts *DecodeOptions) (image.Image, error) {
 			return nil, ErrUnsupportedPixelFmt
 		}
 
-		var bcnOpts *bcn.DecodeOptions
-		if opts != nil && opts.BCn != nil {
-			bcnOpts = opts.BCn
-		}
+		bcnOpts := resolveDecodeBCnOptions(opts)
 
 		img, err := bcn.DecodeImageWithOptions(m.Data, w, h, bf, bcnOpts)
 		if err != nil {
