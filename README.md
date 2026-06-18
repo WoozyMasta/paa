@@ -44,8 +44,10 @@ If you only need texture headers/tags (for example, building `texheaders`)
 without decoding mip payloads, use metadata helpers:
 
 ```go
-meta, err := paa.DecodeMetadata(r)          // full GGAT map + mip headers
-headers, err := paa.DecodeMetadataHeaders(r) // Type + mip headers + CGVA/CXAM/GALF only
+// full GGAT map + mip headers
+meta, err := paa.DecodeMetadata(r)
+// Type + mip headers + CGVA/CXAM/GALF only
+headers, err := paa.DecodeMetadataHeaders(r)
 
 meta2, err := paa.DecodeMetadataBytes(data)
 headers2, err := paa.DecodeMetadataHeadersBytes(data)
