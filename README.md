@@ -143,3 +143,26 @@ A few rules of thumb:
   (one goroutine per file) with `Workers: 1` per call.
   Per-image scaling is sublinear, so spreading cores across files
   gives much higher total throughput than per-image parallelism.
+
+### Reusable Encoder/Decoder
+
+For batch pipelines, reuse a `paa.Encoder`/`paa.Decoder`
+per worker goroutine to avoid re-allocating the mip chain,
+BCn and (de)compression buffers on every image.
+Buffers grow to fit the largest image seen and are reused for smaller ones,
+cutting steady-state allocations by roughly 99% on large textures.
+
+```go
+enc := paa.NewEncoder() // one per goroutine; NOT safe for concurrent use
+for _, job := range jobs {
+    if err := enc.EncodeWithOptions(job.w, job.img, opts); err != nil {
+        // handle err
+    }
+}
+
+dec := paa.NewDecoder()
+img, err := dec.Decode(r) // valid only until the next Decode on this dec
+```
+
+The package-level `Encode`/`Decode`
+functions allocate per call and remain the simplest choice for one-off use.
