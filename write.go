@@ -46,7 +46,28 @@ func EncodeWithOptionsAndMetadataHeaders(w io.Writer, img image.Image, opts *Enc
 func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *MetadataHeaders) error {
 	statImg := img
 
-	avgR, avgG, avgB, avgA, maxR, maxG, maxB, maxA, hasAlpha := imageStats(statImg)
+	// imageStats only feeds the CGVA/CXAM tags, which are written after the heavier mip + BCn + LZO pipeline.
+	// When the output type does not depend on hasAlpha,
+	// run the (serial) stats scan concurrently with that pipeline and join before the tags.
+	var (
+		avgR, avgG, avgB, avgA uint64
+		maxR, maxG, maxB, maxA uint8
+		hasAlpha               bool
+		statsDone              chan struct{}
+	)
+	computeStats := func() {
+		avgR, avgG, avgB, avgA, maxR, maxG, maxB, maxA, hasAlpha = imageStats(statImg)
+	}
+	if opts != nil && (opts.Type != 0 || opts.NormalMapSwizzle) {
+		statsDone = make(chan struct{})
+		go func() {
+			computeStats()
+			close(statsDone)
+		}()
+	} else {
+		// hasAlpha is needed now to choose the type.
+		computeStats()
+	}
 
 	var paxType PaxType
 	switch {
@@ -136,6 +157,12 @@ func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *
 		useLZ bool
 	}
 	mips := make([]mipBlock, 0, 8)
+	// lzoScratch is a per-encode worst-case LZO buffer reused across mips
+	// (sized for the largest, i.e. first, mip).
+	// Intermediate mips copy their result out tight;
+	// the last mip hands the scratch over,
+	// so single-mip encodes allocate exactly as before.
+	var lzoScratch []byte
 
 	// Generate mipmaps.
 	// Build mip chain from the original (unswizzled) image, then swizzle per-mip
@@ -157,7 +184,7 @@ func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *
 		}
 	}
 
-	for _, m := range mipImages {
+	for i, m := range mipImages {
 		encodeImg := m
 		if opts != nil && opts.NormalMapSwizzle {
 			encodeImg = swizzleNormalMap(m)
@@ -186,15 +213,26 @@ func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *
 		useLZO := opts != nil && opts.UseLZO && isDXT(paxType)
 		useLZ := false
 		if useLZO {
-			comp, cerr := lzo.Compress(compressedData, nil)
+			required := lzo.MaxCompressedSize(len(compressedData))
+			if cap(lzoScratch) < required {
+				lzoScratch = make([]byte, required)
+			}
+			comp, cerr := lzo.CompressInto(compressedData, lzoScratch[:cap(lzoScratch)], nil)
 			if cerr != nil {
 				return cerr
 			}
 			if len(comp) < len(compressedData) {
-				compressedData = comp
+				if i == len(mipImages)-1 {
+					// Last mip: hand the scratch over instead of copying it out.
+					compressedData = comp
+				} else {
+					// Copy out tight so the scratch can be reused by the next mip.
+					compressedData = append([]byte(nil), comp...)
+				}
 				useLZ = true
 			}
 		}
+
 		// Non-DXT LZSS: used by BI tools; apply if it reduces size.
 		if !isDXT(paxType) {
 			comp, cerr := lzss.Compress(compressedData, &lzss.CompressOptions{
@@ -240,6 +278,11 @@ func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *
 			return err
 		}
 		return nil
+	}
+
+	// Join the concurrent stats scan before reading/overriding avg*/max*.
+	if statsDone != nil {
+		<-statsDone
 	}
 
 	if opts != nil && opts.NormalMapSwizzle {
