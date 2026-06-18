@@ -127,6 +127,9 @@ func DecodeMetadataHeaders(r io.Reader) (*MetadataHeaders, error) {
 
 		switch string(name[:]) {
 		case "SFFO":
+			if rem, ok := remainingBytes(r); ok && int64(size) > rem {
+				return nil, ErrTagSizeExceedsInput
+			}
 			sffo = make([]byte, size)
 			if _, err := io.ReadFull(r, sffo); err != nil {
 				return nil, err

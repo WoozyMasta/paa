@@ -42,6 +42,45 @@ func readPaxType(r io.Reader) (PaxType, error) {
 	return pType, nil
 }
 
+// maxDecodedMipBytes caps a single decoded mip (width*height*4)
+// to guard against malformed dimensions triggering huge allocations.
+// 512 MiB leaves headroom over the practical PAA maximum (8192x8192 RGBA8 = 256 MiB).
+const maxDecodedMipBytes = 512 << 20
+
+// remainingBytes reports how many bytes remain to be read when r is seekable.
+// All decode paths wrap their reader with ensureSeeker first,
+// so this lets size fields from untrusted input be validated against the actual stream length.
+func remainingBytes(r io.Reader) (int64, bool) {
+	s, ok := r.(io.Seeker)
+	if !ok {
+		return 0, false
+	}
+
+	cur, err := s.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return 0, false
+	}
+	end, err := s.Seek(0, io.SeekEnd)
+	if err != nil {
+		return 0, false
+	}
+	if _, err := s.Seek(cur, io.SeekStart); err != nil {
+		return 0, false
+	}
+
+	return end - cur, true
+}
+
+// checkMipBudget rejects mip dimensions whose decoded size would exceed maxDecodedMipBytes,
+// guarding against malformed headers.
+func checkMipBudget(width, height int) error {
+	if int64(width)*int64(height)*4 > maxDecodedMipBytes {
+		return ErrImageTooLarge
+	}
+
+	return nil
+}
+
 // readGGATTags parses all GGAT tags into map.
 func readGGATTags(r io.Reader) (map[string][]byte, error) {
 	tags := make(map[string][]byte, 8)
@@ -63,6 +102,11 @@ func readGGATTags(r io.Reader) (map[string][]byte, error) {
 		var size uint32
 		if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
 			return nil, err
+		}
+
+		// Reject tag sizes larger than the remaining stream before allocating.
+		if rem, ok := remainingBytes(r); ok && int64(size) > rem {
+			return nil, fmt.Errorf("%w: tag %q size %d, %d remain", ErrTagSizeExceedsInput, nameBuf[:], size, rem)
 		}
 
 		data := make([]byte, size)

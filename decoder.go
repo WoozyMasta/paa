@@ -106,11 +106,20 @@ func (d *Decoder) readMipImage(r io.Reader, paxType PaxType, opts *DecodeOptions
 	}
 	height := int(h)
 
+	if err := checkMipBudget(width, height); err != nil {
+		return nil, false, err
+	}
+
 	var sizeBuf [3]byte
 	if _, err := io.ReadFull(r, sizeBuf[:]); err != nil {
 		return nil, false, err
 	}
 	storedSize := int(sizeBuf[0]) | int(sizeBuf[1])<<8 | int(sizeBuf[2])<<16
+
+	// Reject a payload larger than the remaining stream before allocating.
+	if rem, ok := remainingBytes(r); ok && int64(storedSize) > rem {
+		return nil, false, errors.Join(ErrInsufficientData, fmt.Errorf("mip payload %d, %d remain", storedSize, rem))
+	}
 
 	d.payload = ensureLen(d.payload, storedSize)
 	if _, err := io.ReadFull(r, d.payload); err != nil {

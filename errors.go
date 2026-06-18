@@ -34,4 +34,9 @@ var (
 	ErrInvalidDimensions = errors.New("paa: dimensions exceed PAA uint16 range (0-65535)")
 	// ErrMipDataTooLarge is returned when one mip payload exceeds 24-bit size field capacity.
 	ErrMipDataTooLarge = errors.New("paa: mip payload exceeds 24-bit size field")
+	// ErrTagSizeExceedsInput is returned when a GGAT tag (or its payload)
+	// claims more bytes than remain in the stream.
+	ErrTagSizeExceedsInput = errors.New("paa: tag size exceeds remaining input")
+	// ErrImageTooLarge is returned when a mip's decoded size exceeds the safety limit.
+	ErrImageTooLarge = errors.New("paa: mip decoded size exceeds limit")
 )

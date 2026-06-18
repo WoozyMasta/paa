@@ -48,11 +48,20 @@ func readMipMap(r io.Reader, paxType PaxType) (*MipMap, error) {
 	}
 	height := h
 
+	if err := checkMipBudget(int(width), int(height)); err != nil {
+		return nil, err
+	}
+
 	var sizeBuf [3]byte
 	if _, err := io.ReadFull(r, sizeBuf[:]); err != nil {
 		return nil, err
 	}
 	storedSize := int(sizeBuf[0]) | int(sizeBuf[1])<<8 | int(sizeBuf[2])<<16
+
+	// Reject a payload larger than the remaining stream before allocating.
+	if rem, ok := remainingBytes(r); ok && int64(storedSize) > rem {
+		return nil, errors.Join(ErrInsufficientData, fmt.Errorf("mip payload %d, %d remain", storedSize, rem))
+	}
 
 	payload := make([]byte, storedSize)
 	if _, err := io.ReadFull(r, payload); err != nil {
