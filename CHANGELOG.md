@@ -6,6 +6,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog][],
 and this project adheres to [Semantic Versioning][].
 
+## [0.3.0][] - 2026-06-18
+
+### Added
+
+* `Encoder` and `Decoder` for allocation-free batch encoding/decoding:
+  they reuse their buffers across calls (use one per goroutine).
+
+### Changed
+
+* Encode is about 2x faster and decode about 1.3x faster than v0.2.2,
+  with significantly fewer allocations; output is unchanged.
+  Reusing an `Encoder` or `Decoder` removes almost all
+  remaining per-image allocations.
+* Updated `bcn` to `v0.5.0`, `lzo` to `v0.3.0`, `lzss` to `v0.2.0`.
+
+### Security
+
+* Malformed PAA files can no longer trigger huge allocations:
+  tag and mip sizes are validated against the file
+  and the decoded size is capped `ErrTagSizeExceedsInput`, `ErrImageTooLarge`.
+
+[0.3.0]: https://github.com/WoozyMasta/paa/compare/v0.2.2...v0.3.0
+
 ## [0.2.2][] - 2026-02-17
 
 ### Added
