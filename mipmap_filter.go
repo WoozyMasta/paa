@@ -8,33 +8,8 @@ import (
 	"image"
 	"math"
 
-	"github.com/woozymasta/bcn"
 	"github.com/woozymasta/paa/texconfig"
 )
-
-// generateMipmapsWithFilter generates the mipmaps with the filter applied.
-func generateMipmapsWithFilter(img image.Image, useSRGB bool, filter texconfig.MipmapFilter) []image.Image {
-	mips := bcn.GenerateMipmaps(img, useSRGB)
-	if filter == texconfig.MipmapFilterDefault {
-		out := make([]image.Image, len(mips))
-		for i := range mips {
-			out[i] = mips[i]
-		}
-
-		return out
-	}
-
-	for level := 1; level < len(mips); level++ {
-		applyMipmapFilter(mips[level], level, filter)
-	}
-
-	out := make([]image.Image, len(mips))
-	for i := range mips {
-		out[i] = mips[i]
-	}
-
-	return out
-}
 
 // applyMipmapFilter applies the mipmap filter to the image.
 func applyMipmapFilter(img *image.NRGBA, level int, filter texconfig.MipmapFilter) {

@@ -28,22 +28,18 @@ func Encode(w io.Writer, img image.Image) error {
 // If opts.NormalMapSwizzle is true, normal-map swizzle is applied per mip and format is DXT5 (for _nohq).
 // If opts.Type is set (e.g. PaxDXT1, PaxDXT5), that format is used; otherwise format is chosen by alpha.
 func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error {
-	return encodeWithOptions(w, img, opts, nil)
+	return (&Encoder{}).encodeWithOptions(w, img, opts, nil)
 }
 
 // EncodeWithOptionsAndMetadataHeaders writes the image as PAA and returns
 // compact metadata headers collected during the same encode pass.
 func EncodeWithOptionsAndMetadataHeaders(w io.Writer, img image.Image, opts *EncodeOptions) (*MetadataHeaders, error) {
-	meta := &MetadataHeaders{}
-	if err := encodeWithOptions(w, img, opts, meta); err != nil {
-		return nil, err
-	}
-
-	return meta, nil
+	return (&Encoder{}).EncodeWithOptionsAndMetadataHeaders(w, img, opts)
 }
 
-// encodeWithOptions performs the full encode flow and optionally fills metadata.
-func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *MetadataHeaders) error {
+// encodeWithOptions performs the full encode flow and optionally fills metadata,
+// reusing the Encoder's buffers across calls.
+func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *MetadataHeaders) error {
 	statImg := img
 
 	// imageStats only feeds the CGVA/CXAM tags, which are written after the heavier mip + BCn + LZO pipeline.
@@ -86,9 +82,6 @@ func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *
 			MipHeaders: make([]MipHeader, 0, 16),
 		}
 	}
-
-	var compressedData []byte
-	var err error
 
 	// Mipmap options (defaults mimic BI: full chain down to 4x4).
 	generateMips := true
@@ -151,39 +144,33 @@ func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *
 		writeGALF = true
 	}
 
-	type mipBlock struct {
-		data  []byte
-		w, h  int
-		useLZ bool
-	}
-	mips := make([]mipBlock, 0, 8)
-	// lzoScratch is a per-encode worst-case LZO buffer reused across mips
-	// (sized for the largest, i.e. first, mip).
-	// Intermediate mips copy their result out tight;
-	// the last mip hands the scratch over,
-	// so single-mip encodes allocate exactly as before.
-	var lzoScratch []byte
-
-	// Generate mipmaps.
-	// Build mip chain from the original (unswizzled) image, then swizzle per-mip
-	// if required. This keeps CGVA/CXAM consistent with the original content.
-	mipImages := []image.Image{statImg}
+	// Generate the mip chain into the reusable pool,
+	// then apply the optional per-level filter in place.
+	// The chain is built from the original (unswizzled) image;
+	// per-mip swizzle (if any) is applied below.
+	// This keeps CGVA/CXAM consistent with the original content.
+	mipImages := e.mipImages[:0]
 	if generateMips {
-		mipImages = make([]image.Image, 0)
-
-		for _, m := range generateMipmapsWithFilter(statImg, useSRGB, filter) {
-			mipImages = append(mipImages, m)
-			if maxMipCount > 0 && len(mipImages) >= maxMipCount {
-				break
+		e.mipPool = bcn.GenerateMipmapsInto(e.mipPool, statImg, maxMipCount, useSRGB)
+		if filter != texconfig.MipmapFilterDefault {
+			for level := 1; level < len(e.mipPool); level++ {
+				applyMipmapFilter(e.mipPool[level], level, filter)
 			}
+		}
 
+		for _, m := range e.mipPool {
+			mipImages = append(mipImages, m)
 			bounds := m.Bounds()
 			if bounds.Dx() <= minMipSize && bounds.Dy() <= minMipSize {
 				break
 			}
 		}
+	} else {
+		mipImages = append(mipImages, statImg)
 	}
+	e.mipImages = mipImages
 
+	e.mips = e.mips[:0]
 	for i, m := range mipImages {
 		encodeImg := m
 		if opts != nil && opts.NormalMapSwizzle {
@@ -193,49 +180,58 @@ func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *
 			encodeImg = texconfig.ApplyChannelSwizzle(encodeImg, *opts.Swizzle)
 		}
 
-		if isDXT(paxType) {
-			if paxType == PaxDXT5 {
-				compressedData, _, _, err = bcn.EncodeImageWithOptions(encodeImg, bcn.FormatDXT5, bcnOpts)
-			} else {
-				compressedData, _, _, err = bcn.EncodeImageWithOptions(encodeImg, bcn.FormatDXT1, bcnOpts)
-			}
-			if err != nil {
-				return err
-			}
-		} else {
-			compressedData, err = encodePixelFormat(paxType, encodeImg)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Per-mip LZO: DXT only, use only if it reduces size.
-		useLZO := opts != nil && opts.UseLZO && isDXT(paxType)
+		var data []byte
 		useLZ := false
-		if useLZO {
-			required := lzo.MaxCompressedSize(len(compressedData))
-			if cap(lzoScratch) < required {
-				lzoScratch = make([]byte, required)
-			}
-			comp, cerr := lzo.CompressInto(compressedData, lzoScratch[:cap(lzoScratch)], nil)
-			if cerr != nil {
-				return cerr
-			}
-			if len(comp) < len(compressedData) {
-				if i == len(mipImages)-1 {
-					// Last mip: hand the scratch over instead of copying it out.
-					compressedData = comp
-				} else {
-					// Copy out tight so the scratch can be reused by the next mip.
-					compressedData = append([]byte(nil), comp...)
-				}
-				useLZ = true
-			}
-		}
 
-		// Non-DXT LZSS: used by BI tools; apply if it reduces size.
-		if !isDXT(paxType) {
-			comp, cerr := lzss.Compress(compressedData, &lzss.CompressOptions{
+		if isDXT(paxType) {
+			format := bcn.FormatDXT1
+			if paxType == PaxDXT5 {
+				format = bcn.FormatDXT5
+			}
+
+			var encErr error
+			e.dxtBuf, _, _, encErr = bcn.EncodeImageInto(e.dxtBuf, encodeImg, format, bcnOpts)
+			if encErr != nil {
+				return encErr
+			}
+			dxt := e.dxtBuf
+
+			// Retain each mip's payload in its own reusable buffer; the transient
+			// dxtBuf is overwritten by the next mip. Per-mip LZO is used only when
+			// it reduces size, otherwise the raw DXT is retained.
+			buf := e.payload(i)
+			if opts != nil && opts.UseLZO {
+				required := lzo.MaxCompressedSize(len(dxt))
+				if cap(buf) < required {
+					buf = make([]byte, required)
+				}
+				comp, cerr := lzo.CompressInto(dxt, buf[:required], nil)
+				if cerr != nil {
+					return cerr
+				}
+				if len(comp) < len(dxt) {
+					data = comp
+					useLZ = true
+				}
+			}
+			if !useLZ {
+				if cap(buf) < len(dxt) {
+					buf = make([]byte, len(dxt))
+				}
+				buf = buf[:len(dxt)]
+				copy(buf, dxt)
+				data = buf
+			}
+			e.payloads[i] = buf
+		} else {
+			// Non-DXT (rare): encode raw pixels and LZSS-compress. These paths
+			// allocate per mip as before.
+			raw, perr := encodePixelFormat(paxType, encodeImg)
+			if perr != nil {
+				return perr
+			}
+
+			comp, cerr := lzss.Compress(raw, &lzss.CompressOptions{
 				Checksum:    lzss.ChecksumSigned,
 				SearchLimit: 2048,
 			})
@@ -243,20 +239,22 @@ func encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *
 				return cerr
 			}
 
-			forceLZSS := opts != nil && opts.ForceLZSS
-			if forceLZSS || len(comp) < len(compressedData) {
-				compressedData = comp
+			if (opts != nil && opts.ForceLZSS) || len(comp) < len(raw) {
+				data = comp
+			} else {
+				data = raw
 			}
 		}
 
 		b := encodeImg.Bounds()
-		mips = append(mips, mipBlock{
+		e.mips = append(e.mips, mipBlock{
 			w:     b.Dx(),
 			h:     b.Dy(),
-			data:  compressedData,
+			data:  data,
 			useLZ: useLZ,
 		})
 	}
+	mips := e.mips
 
 	// Write PaxType as first tag.
 	if _, err := w.Write(paxType.Bytes()); err != nil {
