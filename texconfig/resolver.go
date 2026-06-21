@@ -61,6 +61,22 @@ func ResolveTexConvertDefault(name string) (TextureHint, bool, error) {
 	return hint, ok, nil
 }
 
+// ResolveOrFallback tries to resolve name against cfg;
+// if unmatched, retries with "texture_"+fallbackSuffix+".paa" as a synthetic name.
+// Returns the resolved name, its hint, and ok=false if both attempts fail.
+func ResolveOrFallback(name, fallbackSuffix string, cfg TexConvertConfig) (string, TextureHint, bool) {
+	if hint, ok := ResolveTexConvert(name, cfg); ok {
+		return name, hint, true
+	}
+
+	fallbackName := "texture_" + fallbackSuffix + ".paa"
+	if hint, ok := ResolveTexConvert(fallbackName, cfg); ok {
+		return fallbackName, hint, true
+	}
+
+	return "", TextureHint{}, false
+}
+
 // wildcardMatch matches patterns with '*' and '?' against s (case-insensitive).
 func wildcardMatch(pattern, s string) bool {
 	p := []rune(pattern)
