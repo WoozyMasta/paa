@@ -6,6 +6,7 @@ package paa
 
 import (
 	"encoding/binary"
+	"fmt"
 	"image"
 	"image/color"
 	"io"
@@ -214,4 +215,83 @@ func DecodePAA(r io.Reader) (*PAA, error) {
 	}
 
 	return paa, nil
+}
+
+// DecodeNthMip decodes the nth mip level (0-based) from a PAA stream.
+// Returns ErrNoMipmaps if n is out of range.
+func DecodeNthMip(r io.Reader, n int, opts *DecodeOptions) (image.Image, error) {
+	var err error
+	r, seeker, err := ensureSeeker(r)
+	if err != nil {
+		return nil, err
+	}
+
+	pType, err := readPaxType(r)
+	if err != nil {
+		return nil, err
+	}
+
+	tags, err := readGGATTags(r)
+	if err != nil {
+		return nil, err
+	}
+
+	offsets, err := sffoOffsets(tags)
+	if err != nil {
+		return nil, err
+	}
+
+	if n < 0 || n >= len(offsets) {
+		return nil, fmt.Errorf("%w: mip index %d out of range [0, %d)", ErrNoMipmaps, n, len(offsets))
+	}
+
+	if _, err := seeker.Seek(int64(offsets[n]), io.SeekStart); err != nil {
+		return nil, err
+	}
+
+	mm, err := readMipMap(r, pType)
+	if err != nil {
+		return nil, err
+	}
+	if mm == nil {
+		return nil, ErrNoMipmaps
+	}
+
+	img, err := mm.ImageWithOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return applySwizzleTag(tags, pType, img), nil
+}
+
+// AllImages decodes all mip levels and returns them as a slice.
+// Swizzle tags (ZIWS) are applied to each level, consistent with Decode.
+func (p *PAA) AllImages(opts *DecodeOptions) ([]image.Image, error) {
+	if p == nil {
+		return nil, ErrNilPAA
+	}
+	if len(p.MipMaps) == 0 {
+		return nil, ErrNoMipmaps
+	}
+
+	imgs := make([]image.Image, 0, len(p.MipMaps))
+	for _, mm := range p.MipMaps {
+		if mm == nil {
+			continue
+		}
+
+		img, err := mm.ImageWithOptions(opts)
+		if err != nil {
+			return nil, err
+		}
+
+		imgs = append(imgs, applySwizzleTag(p.Taggs, p.Type, img))
+	}
+
+	if len(imgs) == 0 {
+		return nil, ErrNoMipmaps
+	}
+
+	return imgs, nil
 }
