@@ -187,6 +187,10 @@ $RECYCLE.BIN/
 
 # Custom rules (everything added below won't be overriden by 'Generate .gitignore File' if you use 'Update' option)
 
-testdata/paa
+testdata/srgb/out/
+!testdata/srgb/*.png
+!testdata/srgb/*.jpg
+!testdata/srgb/*.jpeg
+
 bench_*.txt
 *.pprof

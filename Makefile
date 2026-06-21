@@ -6,6 +6,7 @@ BENCHSTAT   ?= benchstat
 BENCH_COUNT ?= 6
 BENCH_REF   ?= bench_baseline.txt
 FUZZ_TIME   ?= 20s
+COMPAT_TIME ?= 10m
 
 .PHONY: check ci
 
@@ -37,6 +38,11 @@ bench-fast:
 
 bench-reset:
 	rm -f "$(BENCH_REF)"
+
+.PHONY: samples
+
+samples:
+	PAA_EXPORT_SAMPLES=1 $(GO) test -run '^TestExportSRGBSamples$$' -v .
 
 .PHONY: fuzz
 
