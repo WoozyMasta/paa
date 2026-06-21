@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/woozymasta/bcn v0.5.0
-	github.com/woozymasta/lzo v0.3.0
+	github.com/woozymasta/lzo v0.3.2
 	github.com/woozymasta/lzss v0.2.0
 )
 
