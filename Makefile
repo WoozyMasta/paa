@@ -47,10 +47,10 @@ samples:
 compat: compat-encode compat-decode
 
 compat-encode:
-	$(GO) test -run '^TestCompatEncode$$' -v -timeout $(COMPAT_TIME) .
+	$(GO) test -tags compat -run '^TestCompatEncode$$' -v -timeout $(COMPAT_TIME) .
 
 compat-decode:
-	$(GO) test -run '^TestCompatDecode$$' -v -timeout $(COMPAT_TIME) .
+	$(GO) test -tags compat -run '^TestCompatDecode$$' -v -timeout $(COMPAT_TIME) .
 
 .PHONY: clean samples-clean compat-clean
 
