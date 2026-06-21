@@ -26,9 +26,11 @@ import (
 // and is only valid until the next Decode call on the same Decoder.
 // Copy it if you need to retain it across calls.
 type Decoder struct {
-	img     *image.NRGBA // reusable decoded output
-	payload []byte       // reusable compressed mip payload
-	raw     []byte       // reusable decompressed DXT/pixel buffer
+	img        *image.NRGBA // reusable decoded output
+	payload    []byte       // reusable compressed mip payload
+	raw        []byte       // reusable decompressed DXT/pixel buffer
+	sffo       []byte       // reusable SFFO tag payload buffer
+	mipHeaders []MipHeader  // reusable mip header slice (DecodeMetadataHeaders)
 }
 
 // NewDecoder returns a ready-to-use Decoder.

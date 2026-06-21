@@ -201,4 +201,20 @@ func BenchmarkMainFlowMetadataDecode(b *testing.B) {
 			mainFlowSinkMetadataHeaders = meta
 		}
 	})
+
+	b.Run("HeadersDecoder", func(b *testing.B) {
+		dec := NewDecoder()
+		b.ReportAllocs()
+		b.SetBytes(int64(len(f.encodedPAA)))
+		b.ResetTimer()
+
+		for range b.N {
+			meta, err := dec.DecodeMetadataHeaders(bytes.NewReader(f.encodedPAA))
+			if err != nil {
+				b.Fatalf("decode metadata headers: %v", err)
+			}
+
+			mainFlowSinkMetadataHeaders = &meta
+		}
+	})
 }

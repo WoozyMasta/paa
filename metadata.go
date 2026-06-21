@@ -181,6 +181,126 @@ func DecodeMetadataHeadersBytes(data []byte) (*MetadataHeaders, error) {
 	return DecodeMetadataHeaders(bytes.NewReader(data))
 }
 
+// DecodeMetadataHeaders reads compact metadata reusing the Decoder's internal
+// SFFO and mip-header buffers, eliminating per-call allocations in scan pipelines.
+//
+// The returned MetadataHeaders.MipHeaders slice shares the Decoder's internal
+// buffer and is only valid until the next call on the same Decoder;
+// copy it if you need to retain it across iterations.
+func (d *Decoder) DecodeMetadataHeaders(r io.Reader) (MetadataHeaders, error) {
+	var err error
+	r, seeker, err := ensureSeeker(r)
+	if err != nil {
+		return MetadataHeaders{}, err
+	}
+
+	pType, err := readPaxType(r)
+	if err != nil {
+		return MetadataHeaders{}, err
+	}
+
+	var (
+		headers  MetadataHeaders
+		sffoSize int
+	)
+	headers.Type = pType
+
+	for {
+		var sig [4]byte
+		if _, err := io.ReadFull(r, sig[:]); err != nil {
+			return MetadataHeaders{}, err
+		}
+		if string(sig[:]) != "GGAT" {
+			break
+		}
+
+		var name [4]byte
+		if _, err := io.ReadFull(r, name[:]); err != nil {
+			return MetadataHeaders{}, err
+		}
+
+		var size uint32
+		if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
+			return MetadataHeaders{}, err
+		}
+
+		switch string(name[:]) {
+		case "SFFO":
+			if rem, ok := remainingBytes(r); ok && int64(size) > rem {
+				return MetadataHeaders{}, ErrTagSizeExceedsInput
+			}
+			d.sffo = ensureLen(d.sffo, int(size))
+			if _, err := io.ReadFull(r, d.sffo); err != nil {
+				return MetadataHeaders{}, err
+			}
+			sffoSize = int(size)
+
+		case "CGVA":
+			ok, err := readTagPrefixAndDiscard(r, size, headers.AverageColor[:])
+			if err != nil {
+				return MetadataHeaders{}, err
+			}
+			headers.HasAverageColor = ok
+
+		case "CXAM":
+			ok, err := readTagPrefixAndDiscard(r, size, headers.MaxColor[:])
+			if err != nil {
+				return MetadataHeaders{}, err
+			}
+			headers.HasMaxColor = ok
+
+		case "GALF":
+			var raw [4]byte
+			ok, err := readTagPrefixAndDiscard(r, size, raw[:])
+			if err != nil {
+				return MetadataHeaders{}, err
+			}
+			headers.HasGALF = ok
+			if ok {
+				headers.GALF = binary.LittleEndian.Uint32(raw[:])
+			}
+
+		default:
+			if err := discardN(r, int64(size)); err != nil {
+				return MetadataHeaders{}, err
+			}
+		}
+	}
+
+	offsets, err := sffoOffsetsRaw(d.sffo[:sffoSize])
+	if err != nil {
+		return MetadataHeaders{}, err
+	}
+
+	d.mipHeaders = d.mipHeaders[:0]
+	for _, offset := range offsets {
+		if _, err := seeker.Seek(int64(offset), io.SeekStart); err != nil {
+			return MetadataHeaders{}, err
+		}
+
+		var w, h uint16
+		if err := binary.Read(r, binary.LittleEndian, &w); err != nil {
+			return MetadataHeaders{}, err
+		}
+		if err := binary.Read(r, binary.LittleEndian, &h); err != nil {
+			return MetadataHeaders{}, err
+		}
+
+		if w == 0 && h == 0 {
+			continue
+		}
+
+		if isDXTPaxType(pType) && (w&0x8000) != 0 {
+			w &= 0x7FFF
+		}
+
+		d.mipHeaders = append(d.mipHeaders, MipHeader{Width: w, Height: h, Offset: offset})
+	}
+
+	headers.MipHeaders = d.mipHeaders
+	return headers, nil
+}
+
 // buildMetadataFromOffsets creates Metadata from already parsed SFFO offsets.
 func buildMetadataFromOffsets(r io.Reader, seeker io.Seeker, pType PaxType, tags map[string][]byte, offsets []uint32) (*Metadata, error) {
 	headers, err := readMipHeadersByOffsets(r, seeker, pType, offsets)
