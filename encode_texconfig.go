@@ -5,6 +5,7 @@
 package paa
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"io"
@@ -22,7 +23,13 @@ func EncodeWithTexConfig(w io.Writer, img image.Image, name string, cfg texconfi
 
 // EncodeWithTexConfigOptions resolves filename-based settings from a TexConvert config,
 // applies optional overrides, and encodes the image using those settings.
-func EncodeWithTexConfigOptions(w io.Writer, img image.Image, name string, cfg texconfig.TexConvertConfig, override *EncodeOptions) error {
+func EncodeWithTexConfigOptions(
+	w io.Writer,
+	img image.Image,
+	name string,
+	cfg texconfig.TexConvertConfig,
+	override *EncodeOptions,
+) error {
 	hint, ok := texconfig.Resolve(name, cfg)
 	if !ok {
 		opts := &EncodeOptions{}
@@ -58,8 +65,41 @@ func EncodeWithTexConfigOptions(w io.Writer, img image.Image, name string, cfg t
 	return EncodeWithOptions(w, img, opts)
 }
 
+// EncodeWithTexConfigFallback is like EncodeWithTexConfig but if name does not match any hint,
+// it retries resolution with "texture_"+fallbackSuffix+".paa".
+// Returns ErrUnsupportedFormat if neither the name nor the fallback resolves.
+func EncodeWithTexConfigFallback(
+	w io.Writer,
+	img image.Image,
+	name, fallbackSuffix string,
+	cfg texconfig.TexConvertConfig,
+) error {
+	resolvedName, _, ok := texconfig.ResolveOrFallback(name, fallbackSuffix, cfg)
+	if !ok {
+		return fmt.Errorf("%w: no texconfig hint for %q (fallback %q)", ErrUnsupportedFormat, name, fallbackSuffix)
+	}
+
+	return EncodeWithTexConfig(w, img, resolvedName, cfg)
+}
+
+// EncodeWithFallback is like EncodeWithTexConfigFallback but uses the global default
+// TexConvert config, so the caller does not need to load it explicitly.
+func EncodeWithFallback(w io.Writer, img image.Image, name, fallbackSuffix string) error {
+	cfg, err := texconfig.DefaultTexConvertConfig()
+	if err != nil {
+		return err
+	}
+
+	return EncodeWithTexConfigFallback(w, img, name, fallbackSuffix, cfg)
+}
+
 // EncodeOptionsFromHint converts a resolved TexConvert hint into EncodeOptions.
-func EncodeOptionsFromHint(img image.Image, hint texconfig.TextureHint, cfg texconfig.TexConvertConfig, skipSwizzle bool) (*EncodeOptions, error) {
+func EncodeOptionsFromHint(
+	img image.Image,
+	hint texconfig.TextureHint,
+	cfg texconfig.TexConvertConfig,
+	skipSwizzle bool,
+) (*EncodeOptions, error) {
 	stats := scanAlpha(img)
 
 	if isTexViewUnsupported(hint) {
