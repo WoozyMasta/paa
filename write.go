@@ -239,11 +239,10 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 				return cerr
 			}
 
-			if (opts != nil && opts.ForceLZSS) || len(comp) < len(raw) {
-				data = comp
-			} else {
-				data = raw
-			}
+			// Always store LZSS for non-DXT: official tools compress every mip
+			// unconditionally, and TexView expects LZSS even for tiny mips where
+			// compressed size exceeds raw size.
+			data = comp
 		}
 
 		b := encodeImg.Bounds()
