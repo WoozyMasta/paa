@@ -161,7 +161,7 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		for _, m := range e.mipPool {
 			mipImages = append(mipImages, m)
 			bounds := m.Bounds()
-			if bounds.Dx() <= minMipSize && bounds.Dy() <= minMipSize {
+			if bounds.Dx() <= minMipSize || bounds.Dy() <= minMipSize {
 				break
 			}
 		}
