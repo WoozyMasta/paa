@@ -205,7 +205,11 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 				if cap(buf) < required {
 					buf = make([]byte, required)
 				}
-				comp, cerr := lzo.CompressInto(dxt, buf[:required], nil)
+				var lzoOpts *lzo.CompressOptions
+				if opts.LZOLevel > 1 {
+					lzoOpts = &lzo.CompressOptions{Level: opts.LZOLevel}
+				}
+				comp, cerr := lzo.CompressInto(dxt, buf[:required], lzoOpts)
 				if cerr != nil {
 					return cerr
 				}
@@ -231,9 +235,13 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 				return perr
 			}
 
+			searchLimit := 2048
+			if opts != nil && opts.LZSSSearchLimit > 0 {
+				searchLimit = opts.LZSSSearchLimit
+			}
 			comp, cerr := lzss.Compress(raw, &lzss.CompressOptions{
 				Checksum:    lzss.ChecksumSigned,
-				SearchLimit: 2048,
+				SearchLimit: searchLimit,
 			})
 			if cerr != nil {
 				return cerr

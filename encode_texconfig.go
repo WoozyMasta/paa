@@ -125,7 +125,6 @@ func EncodeOptionsFromHint(
 	}
 	if paxType == PaxARGB4 {
 		opts.ForceCXAMFull = true
-		opts.ForceLZSS = true
 	}
 	if paxType == PaxARGBA5 || paxType == PaxARGB8 {
 		opts.ForceCXAMFull = true
@@ -322,9 +321,6 @@ func applyEncodeOverrides(dst *EncodeOptions, override *EncodeOptions) {
 
 	// Explicitly propagate ForceCXAMFull override.
 	dst.ForceCXAMFull = override.ForceCXAMFull
-	if override.ForceLZSS {
-		dst.ForceLZSS = true
-	}
 }
 
 // ensureBCnOptions ensures that the BCn options are set.

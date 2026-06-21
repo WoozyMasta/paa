@@ -531,7 +531,6 @@ func TestLZSSChecksumSigned(t *testing.T) {
 
 	opts := &EncodeOptions{
 		Type:            PaxARGBA5,
-		ForceLZSS:       true,
 		GenerateMipmaps: ptrBool(false),
 	}
 	var buf bytes.Buffer
@@ -594,7 +593,6 @@ func TestNonDXTMipChain(t *testing.T) {
 		t.Fatalf("mip count=%d, want 4", len(p.MipMaps))
 	}
 }
-
 
 func assertSFFOOffsets(t *testing.T, data []byte, taggs map[string][]byte) {
 	t.Helper()

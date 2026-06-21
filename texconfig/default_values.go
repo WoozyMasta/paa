@@ -14,7 +14,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				ClassName: "TexRGBA8888",
 				Pattern:   "*_8888.*",
 				Format:    TexFormatARGB1555,
-				DynRange: boolPtr(true),
+				DynRange:  boolPtr(true),
 			},
 			{
 				ClassName: "ColorMap",
@@ -26,7 +26,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 				ClassName: "ColorMapRaw",
 				Pattern:   "*_raw.*",
 				Format:    TexFormatARGB1555,
-				DynRange: boolPtr(false),
+				DynRange:  boolPtr(false),
 			},
 			{
 				ClassName: "ColorAlphaMap",

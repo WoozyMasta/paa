@@ -25,6 +25,12 @@ type EncodeOptions struct {
 	MaxMipCount int
 	// MinMipSize stops mip generation when both dimensions are <= this value. 0 = default (4).
 	MinMipSize int
+	// LZOLevel controls LZO compression quality when UseLZO is true.
+	// 0 or 1 = fast LZO1X-1 (default); 2–9 = LZO1X-999 (better ratio, slower).
+	LZOLevel int
+	// LZSSSearchLimit controls the LZSS backward-match window for non-DXT payloads.
+	// 0 uses the default (2048); valid range is 1–4096.
+	LZSSSearchLimit int
 	// Type is the PAA pixel format (PaxDXT1, PaxDXT5, etc.).
 	// Zero value means auto: DXT5 if image has any non-opaque alpha, else DXT1.
 	Type PaxType
@@ -50,8 +56,6 @@ type EncodeOptions struct {
 	ForceCXAMFull bool
 	// UseLZO enables Arma2+ LZO compression for DXT payloads (width high bit).
 	UseLZO bool
-	// ForceLZSS forces LZSS compression for non-DXT payloads, even when it grows size.
-	ForceLZSS bool
 	// UseSRGB enables sRGB-aware downscale for mip generation.
 	UseSRGB bool
 }

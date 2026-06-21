@@ -223,7 +223,11 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 
 		data, useLZ := raw, false
 		if useLZO {
-			comp, err := lzo.CompressInto(raw, make([]byte, lzo.MaxCompressedSize(len(raw))), nil)
+			var lzoOpts *lzo.CompressOptions
+			if opts != nil && opts.LZOLevel > 1 {
+				lzoOpts = &lzo.CompressOptions{Level: opts.LZOLevel}
+			}
+			comp, err := lzo.CompressInto(raw, make([]byte, lzo.MaxCompressedSize(len(raw))), lzoOpts)
 			if err == nil && len(comp) < len(raw) {
 				data, useLZ = comp, true
 			}
