@@ -52,6 +52,16 @@ compat-encode:
 compat-decode:
 	$(GO) test -run '^TestCompatDecode$$' -v -timeout $(COMPAT_TIME) .
 
+.PHONY: clean samples-clean compat-clean
+
+clean: samples-clean compat-clean
+
+samples-clean:
+	rm -rf -- ./testdata/srgb/out
+
+compat-clean:
+	rm -rf -- ./testdata/compat
+
 .PHONY: fuzz
 
 fuzz:
