@@ -39,10 +39,18 @@ bench-fast:
 bench-reset:
 	rm -f "$(BENCH_REF)"
 
-.PHONY: samples
+.PHONY: samples compat compat-encode compat-decode
 
 samples:
 	PAA_EXPORT_SAMPLES=1 $(GO) test -run '^TestExportSRGBSamples$$' -v .
+
+compat: compat-encode compat-decode
+
+compat-encode:
+	$(GO) test -run '^TestCompatEncode$$' -v -timeout $(COMPAT_TIME) .
+
+compat-decode:
+	$(GO) test -run '^TestCompatDecode$$' -v -timeout $(COMPAT_TIME) .
 
 .PHONY: fuzz
 
