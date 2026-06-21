@@ -6,6 +6,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog][],
 and this project adheres to [Semantic Versioning][].
 
+<!--
+## Unreleased
+
+### Added
+### Changed
+### Removed
+-->
+
+## [0.4.0][] - 2026-06-21
+
+### Added
+
+* `EncodeWithTexConfigFallback` like `EncodeWithTexConfig`
+  but retries resolution with a `fallbackSuffix`-based name
+  when the filename has no hint;
+  returns `ErrUnsupportedFormat` if neither resolves.
+* `EncodeWithFallback` same as above using the global default config.
+* `texconfig.ResolveOrFallback` resolves a filename,
+  falling back to `"texture_"+fallbackSuffix+".paa"` on no match.
+* `EncodeFromDDS` and `EncodeFromKTX` for convert DDS/KTX with pre-compressed
+  DXT1/DXT3/DXT5 blocks to PAA without re-encoding.
+* `DecodeNthMip` decodes a single mip level by index (0-based)
+  without loading others.
+* `(*PAA).AllImages` decodes all mip levels from an already-parsed PAA;
+  swizzle tags are applied consistently with `Decode`.
+* `(*Decoder).DecodeMetadataHeaders` zero-alloc metadata scan in steady state;
+  returns MetadataHeaders by value,
+  reusing internal SFFO and mip-header buffers.
+
+[0.4.0]: https://github.com/WoozyMasta/paa/compare/v0.3.0...v0.4.0
+
 ## [0.3.0][] - 2026-06-18
 
 ### Added
