@@ -34,6 +34,28 @@ and this project adheres to [Semantic Versioning][].
 * `(*Decoder).DecodeMetadataHeaders` zero-alloc metadata scan in steady state;
   returns MetadataHeaders by value,
   reusing internal SFFO and mip-header buffers.
+* `EncodeOptions.LZOLevel` controls LZO compression quality
+  for DXT payloads when `UseLZO` is true:
+  0/1 = fast LZO1X-1 (default), 2–9 = LZO1X-999 (better ratio, slower encode).
+* `EncodeOptions.LZSSSearchLimit` overrides the LZSS backward-match window
+  (default 2048, max 4096) for non-DXT payloads (AI88, ARGB4444, ARGB1555).
+
+### Removed
+
+* `EncodeOptions.ForceLZSS` - non-DXT mips are now always LZSS-compressed
+  (the write-path fix made this flag a no-op).
+
+### Fixed
+
+* Non-square textures (e.g. 512x256) generated a spurious sub-minimum DXT mip:
+  mip generation stopped only when both dimensions reached `MinMipSize` (4);
+  it now stops when either does, matching the official ImageToPAA behaviour.
+* Non-DXT mips (AI88, ARGB4444, ARGB1555) were stored uncompressed
+  when LZSS would expand the data;
+  TexView always expects LZSS regardless of size,
+  causing "Out of memory" crashes on `_gs`, `_88`, `_1555`, and related types.
+* `_8888`, `_raw`, and `_draftlco` texture types (all ARGB1555) were blocked by
+  the encoder as a workaround for the LZSS crash above; they are now supported.
 
 [0.4.0]: https://github.com/WoozyMasta/paa/compare/v0.3.0...v0.4.0
 
