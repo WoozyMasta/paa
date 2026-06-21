@@ -102,10 +102,6 @@ func EncodeOptionsFromHint(
 ) (*EncodeOptions, error) {
 	stats := scanAlpha(img)
 
-	if isTexViewUnsupported(hint) {
-		return nil, ErrUnsupportedFormat
-	}
-
 	if hint.EnableDXT != nil && !*hint.EnableDXT {
 		switch hint.Format {
 		case texconfig.TexFormatARGB4444, texconfig.TexFormatARGB1555, texconfig.TexFormatAI88, texconfig.TexFormatP8:
@@ -402,17 +398,6 @@ func shouldSkipSwizzle(img image.Image, hint texconfig.TextureHint) bool {
 func isDetailHint(hint texconfig.TextureHint) bool {
 	switch hint.ClassName {
 	case "detail", "detail_short":
-		return true
-	default:
-		return false
-	}
-}
-
-// isTexViewUnsupported marks formats that crash TexView despite matching TexConvert.cfg.
-func isTexViewUnsupported(hint texconfig.TextureHint) bool {
-	switch hint.ClassName {
-	case "TexRGBA8888", "ColorMapRaw", "layer_color_draft":
-		// FIXME: TexView crashes on ARGB1555 for *_raw and *_draftlco, and on *_8888 (mapped to ARGB1555 in TexConvert.cfg).
 		return true
 	default:
 		return false

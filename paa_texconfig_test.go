@@ -32,10 +32,6 @@ func TestTexConfigHeadersFromPNG(t *testing.T) {
 			if !ok {
 				t.Fatalf("no texconfig hint for %s", tc.name)
 			}
-			if isTexViewUnsupported(hint) {
-				t.Skipf("unsupported in TexView: %s", tc.name)
-			}
-
 			var buf bytes.Buffer
 			if err := EncodeWithTexConfigOptions(&buf, img, tc.name, cfg, nil); err != nil {
 				t.Fatalf("encode: %v", err)

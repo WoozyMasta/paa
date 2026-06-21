@@ -13,8 +13,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 			{
 				ClassName: "TexRGBA8888",
 				Pattern:   "*_8888.*",
-				// FIXME: TexView crashes on ARGB1555 for *_8888; disabled in encoder.
-				Format:   TexFormatARGB1555,
+				Format:    TexFormatARGB1555,
 				DynRange: boolPtr(true),
 			},
 			{
@@ -26,8 +25,7 @@ func defaultTexConvertConfig() TexConvertConfig {
 			{
 				ClassName: "ColorMapRaw",
 				Pattern:   "*_raw.*",
-				// FIXME: TexView crashes on ARGB1555 for *_raw; disabled in encoder.
-				Format:   TexFormatARGB1555,
+				Format:    TexFormatARGB1555,
 				DynRange: boolPtr(false),
 			},
 			{
@@ -86,7 +84,6 @@ func defaultTexConvertConfig() TexConvertConfig {
 			{
 				ClassName: "layer_color_draft",
 				Pattern:   "*_draftlco.*",
-				// FIXME: TexView crashes on ARGB1555 for *_draftlco; disabled in encoder.
 				Format:    TexFormatARGB1555,
 				EnableDXT: boolPtr(false),
 				DynRange:  boolPtr(false),

@@ -502,14 +502,9 @@ func TestRoundTripHeadersFromPAAFiles(t *testing.T) {
 			}
 
 			name := filepath.Base(path)
-			hint, ok := texconfig.Resolve(name, cfg)
-			if !ok {
+			if _, ok := texconfig.Resolve(name, cfg); !ok {
 				t.Skipf("no texconfig hint for %s (not in base config)", name)
 			}
-			if isTexViewUnsupported(hint) {
-				t.Skipf("unsupported in TexView: %s", name)
-			}
-
 			var buf bytes.Buffer
 			if err := EncodeWithTexConfigOptions(&buf, img, name, cfg, override); err != nil {
 				t.Fatalf("encode: %v", err)
@@ -600,24 +595,6 @@ func TestNonDXTMipChain(t *testing.T) {
 	}
 }
 
-func TestUnsupportedFormats(t *testing.T) {
-	cfg, cfgErr := texconfig.DefaultTexConvertConfig()
-	if cfgErr != nil {
-		t.Fatalf("default texconfig: %v", cfgErr)
-	}
-	img := image.NewNRGBA(image.Rect(0, 0, 8, 8))
-
-	names := []string{"test_raw.paa", "test_draftlco.paa", "test_8888.paa"}
-	for _, name := range names {
-		name := name
-		t.Run(name, func(t *testing.T) {
-			err := EncodeWithTexConfigOptions(&bytes.Buffer{}, img, name, cfg, nil)
-			if err == nil || !errors.Is(err, ErrUnsupportedFormat) {
-				t.Fatalf("expected ErrUnsupportedFormat, got %v", err)
-			}
-		})
-	}
-}
 
 func assertSFFOOffsets(t *testing.T, data []byte, taggs map[string][]byte) {
 	t.Helper()
