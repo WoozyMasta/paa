@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning][].
 
 * Zero-copy DDS/KTX export support for `PaxARGBA5` (`RGBA5551`)
   and `PaxARGB8` (`BGRA8`), preserving all mip payloads.
+* Safety limits for PAA decoding:
+  512 MiB input and decoded mip-chain budgets,
+  16 MiB per GGAT tag, and a maximum of 64 GGAT tags.
 
 ### Fixed
 

@@ -37,6 +37,12 @@ var (
 	// ErrTagSizeExceedsInput is returned when a GGAT tag (or its payload)
 	// claims more bytes than remain in the stream.
 	ErrTagSizeExceedsInput = errors.New("paa: tag size exceeds remaining input")
+	// ErrInputTooLarge is returned when the PAA input exceeds the safety limit.
+	ErrInputTooLarge = errors.New("paa: input exceeds safety limit")
+	// ErrTagTooLarge is returned when a GGAT tag exceeds the safety limit.
+	ErrTagTooLarge = errors.New("paa: tag exceeds safety limit")
+	// ErrTooManyTags is returned when a PAA contains more GGAT tags than supported.
+	ErrTooManyTags = errors.New("paa: too many GGAT tags")
 	// ErrImageTooLarge is returned when a mip's decoded size exceeds the safety limit.
 	ErrImageTooLarge = errors.New("paa: mip decoded size exceeds limit")
 )

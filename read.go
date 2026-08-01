@@ -196,13 +196,14 @@ func DecodePAA(r io.Reader) (*PAA, error) {
 		Taggs: tags,
 	}
 
-	// Read mipmaps from SFFO offsets.
+	// Read mipmaps from SFFO offsets while bounding the aggregate decoded payload.
+	remainingDecoded := maxDecodedMipBytes
 	for _, offset := range offsets {
 		if _, err := seeker.Seek(int64(offset), io.SeekStart); err != nil {
 			return nil, err
 		}
 
-		mm, err := readMipMap(r, paa.Type)
+		mm, err := readMipMapWithLimit(r, paa.Type, remainingDecoded)
 		if err != nil {
 			return nil, err
 		}
@@ -210,6 +211,7 @@ func DecodePAA(r io.Reader) (*PAA, error) {
 		if mm == nil {
 			continue
 		}
+		remainingDecoded -= len(mm.Data)
 
 		paa.MipMaps = append(paa.MipMaps, mm)
 	}

@@ -56,6 +56,11 @@ type MipMap struct {
 // For Arma2+ DXT, the top bit of width indicates LZO compression; it is masked for dimensions.
 // Returns (nil, nil) for the dummy mip (width==0 && height==0).
 func readMipMap(r io.Reader, paxType PaxType) (*MipMap, error) {
+	return readMipMapWithLimit(r, paxType, maxDecodedMipBytes)
+}
+
+// readMipMapWithLimit reads one mipmap while bounding its decoded payload size.
+func readMipMapWithLimit(r io.Reader, paxType PaxType, rawLimit int) (*MipMap, error) {
 	var w, h uint16
 	if err := binary.Read(r, binary.LittleEndian, &w); err != nil {
 		return nil, err
@@ -84,6 +89,13 @@ func readMipMap(r io.Reader, paxType PaxType) (*MipMap, error) {
 		return nil, err
 	}
 	storedSize := int(sizeBuf[0]) | int(sizeBuf[1])<<8 | int(sizeBuf[2])<<16
+	expectedRaw := expectedMipSize(paxType, int(width), int(height))
+	if expectedRaw < 0 {
+		return nil, ErrUnsupportedPixelFmt
+	}
+	if expectedRaw > rawLimit {
+		return nil, ErrImageTooLarge
+	}
 
 	// Reject a payload larger than the remaining stream before allocating.
 	if rem, ok := remainingBytes(r); ok && int64(storedSize) > rem {
@@ -93,11 +105,6 @@ func readMipMap(r io.Reader, paxType PaxType) (*MipMap, error) {
 	payload := make([]byte, storedSize)
 	if _, err := io.ReadFull(r, payload); err != nil {
 		return nil, err
-	}
-
-	expectedRaw := expectedMipSize(paxType, int(width), int(height))
-	if expectedRaw < 0 {
-		return nil, ErrUnsupportedPixelFmt
 	}
 
 	var raw []byte

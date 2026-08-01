@@ -11,20 +11,46 @@ import (
 	"io"
 )
 
+const (
+	// maxPAAInputBytes bounds buffered non-seekable inputs and seekable PAA files.
+	// It accommodates a full 8192x8192 RGBA8 texture plus its mip chain.
+	maxPAAInputBytes int64 = 512 << 20
+	// maxGGATTagBytes prevents metadata allocations disproportionate to PAA content.
+	maxGGATTagBytes uint32 = 16 << 20
+	// maxGGATTags bounds map growth and scanning work on malformed files.
+	maxGGATTags = 64
+)
+
 // ensureSeeker wraps non-seekable readers into bytes.Reader.
 func ensureSeeker(r io.Reader) (io.Reader, io.Seeker, error) {
 	seeker, ok := r.(io.Seeker)
 	if ok {
+		if rem, known := remainingBytes(r); known && rem > maxPAAInputBytes {
+			return nil, nil, ErrInputTooLarge
+		}
+
 		return r, seeker, nil
 	}
 
-	data, err := io.ReadAll(r)
+	data, err := readAllLimited(r, maxPAAInputBytes)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	br := bytes.NewReader(data)
 	return br, br, nil
+}
+
+func readAllLimited(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, ErrInputTooLarge
+	}
+
+	return data, nil
 }
 
 // readPaxType reads and validates first 2 bytes as pax type.
@@ -84,6 +110,7 @@ func checkMipBudget(width, height int) error {
 // readGGATTags parses all GGAT tags into map.
 func readGGATTags(r io.Reader) (map[string][]byte, error) {
 	tags := make(map[string][]byte, 8)
+	tagCount := 0
 	for {
 		var sig [4]byte
 		if _, err := io.ReadFull(r, sig[:]); err != nil {
@@ -92,6 +119,10 @@ func readGGATTags(r io.Reader) (map[string][]byte, error) {
 
 		if string(sig[:]) != "GGAT" {
 			break
+		}
+		tagCount++
+		if tagCount > maxGGATTags {
+			return nil, ErrTooManyTags
 		}
 
 		var nameBuf [4]byte
@@ -104,9 +135,8 @@ func readGGATTags(r io.Reader) (map[string][]byte, error) {
 			return nil, err
 		}
 
-		// Reject tag sizes larger than the remaining stream before allocating.
-		if rem, ok := remainingBytes(r); ok && int64(size) > rem {
-			return nil, fmt.Errorf("%w: tag %q size %d, %d remain", ErrTagSizeExceedsInput, nameBuf[:], size, rem)
+		if err := checkGGATTagSize(r, nameBuf[:], size); err != nil {
+			return nil, err
 		}
 
 		data := make([]byte, size)
@@ -118,6 +148,18 @@ func readGGATTags(r io.Reader) (map[string][]byte, error) {
 	}
 
 	return tags, nil
+}
+
+// checkGGATTagSize validates a GGAT payload against configured and input bounds.
+func checkGGATTagSize(r io.Reader, name []byte, size uint32) error {
+	if size > maxGGATTagBytes {
+		return fmt.Errorf("%w: tag %q size %d, limit %d", ErrTagTooLarge, name, size, maxGGATTagBytes)
+	}
+	if rem, ok := remainingBytes(r); ok && int64(size) > rem {
+		return fmt.Errorf("%w: tag %q size %d, %d remain", ErrTagSizeExceedsInput, name, size, rem)
+	}
+
+	return nil
 }
 
 // sffoOffsets returns non-zero offsets from SFFO tag.

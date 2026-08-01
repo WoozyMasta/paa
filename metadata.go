@@ -105,6 +105,7 @@ func DecodeMetadataHeaders(r io.Reader) (*MetadataHeaders, error) {
 			Type:       pType,
 			MipHeaders: make([]MipHeader, 0, 16),
 		}
+		tagCount int
 	)
 	for {
 		var sig [4]byte
@@ -113,6 +114,10 @@ func DecodeMetadataHeaders(r io.Reader) (*MetadataHeaders, error) {
 		}
 		if string(sig[:]) != "GGAT" {
 			break
+		}
+		tagCount++
+		if tagCount > maxGGATTags {
+			return nil, ErrTooManyTags
 		}
 
 		var name [4]byte
@@ -125,11 +130,12 @@ func DecodeMetadataHeaders(r io.Reader) (*MetadataHeaders, error) {
 			return nil, err
 		}
 
+		if err := checkGGATTagSize(r, name[:], size); err != nil {
+			return nil, err
+		}
+
 		switch string(name[:]) {
 		case "SFFO":
-			if rem, ok := remainingBytes(r); ok && int64(size) > rem {
-				return nil, ErrTagSizeExceedsInput
-			}
 			sffo = make([]byte, size)
 			if _, err := io.ReadFull(r, sffo); err != nil {
 				return nil, err
@@ -202,6 +208,7 @@ func (d *Decoder) DecodeMetadataHeaders(r io.Reader) (MetadataHeaders, error) {
 	var (
 		headers  MetadataHeaders
 		sffoSize int
+		tagCount int
 	)
 	headers.Type = pType
 
@@ -212,6 +219,10 @@ func (d *Decoder) DecodeMetadataHeaders(r io.Reader) (MetadataHeaders, error) {
 		}
 		if string(sig[:]) != "GGAT" {
 			break
+		}
+		tagCount++
+		if tagCount > maxGGATTags {
+			return MetadataHeaders{}, ErrTooManyTags
 		}
 
 		var name [4]byte
@@ -224,11 +235,12 @@ func (d *Decoder) DecodeMetadataHeaders(r io.Reader) (MetadataHeaders, error) {
 			return MetadataHeaders{}, err
 		}
 
+		if err := checkGGATTagSize(r, name[:], size); err != nil {
+			return MetadataHeaders{}, err
+		}
+
 		switch string(name[:]) {
 		case "SFFO":
-			if rem, ok := remainingBytes(r); ok && int64(size) > rem {
-				return MetadataHeaders{}, ErrTagSizeExceedsInput
-			}
 			d.sffo = ensureLen(d.sffo, int(size))
 			if _, err := io.ReadFull(r, d.sffo); err != nil {
 				return MetadataHeaders{}, err
