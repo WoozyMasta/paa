@@ -208,6 +208,10 @@ func paxToBcnFormat(p PaxType) bcn.Format {
 		return bcn.FormatDXT3
 	case PaxDXT4:
 		return bcn.FormatDXT5
+	case PaxARGBA5:
+		return bcn.FormatRGBA5551
+	case PaxARGB8:
+		return bcn.FormatBGRA8
 	default:
 		return bcn.FormatUnknown
 	}

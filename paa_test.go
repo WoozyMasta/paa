@@ -249,6 +249,90 @@ func TestToKTXPreservesMipmaps(t *testing.T) {
 	}
 }
 
+func TestToDDSAndKTXPreserveUncompressedMipmaps(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 32, 32))
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 32; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x * 8), G: uint8(y * 8), B: uint8((x + y) * 4), A: uint8((x + y) & 0xFF)})
+		}
+	}
+
+	tests := []struct {
+		name   string
+		pax    PaxType
+		format bcn.Format
+	}{
+		{name: "ARGB1555", pax: PaxARGBA5, format: bcn.FormatRGBA5551},
+		{name: "ARGB8", pax: PaxARGB8, format: bcn.FormatBGRA8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var encoded bytes.Buffer
+			if err := EncodeWithOptions(&encoded, img, &EncodeOptions{Type: tt.pax}); err != nil {
+				t.Fatalf("EncodeWithOptions: %v", err)
+			}
+
+			p, err := DecodePAA(bytes.NewReader(encoded.Bytes()))
+			if err != nil {
+				t.Fatalf("DecodePAA: %v", err)
+			}
+
+			dds, err := p.ToDDS()
+			if err != nil {
+				t.Fatalf("ToDDS: %v", err)
+			}
+			assertExportedMipmaps(t, dds.Format, dds.Faces, tt.format, p.MipMaps)
+
+			var ddsData bytes.Buffer
+			if err := dds.Write(&ddsData); err != nil {
+				t.Fatalf("DDS Write: %v", err)
+			}
+			readDDS, err := bcn.ReadDDS(bytes.NewReader(ddsData.Bytes()))
+			if err != nil {
+				t.Fatalf("ReadDDS: %v", err)
+			}
+			assertExportedMipmaps(t, readDDS.Format, readDDS.Faces, tt.format, p.MipMaps)
+
+			ktx, err := p.ToKTX()
+			if err != nil {
+				t.Fatalf("ToKTX: %v", err)
+			}
+			assertExportedMipmaps(t, ktx.Format, ktx.Faces, tt.format, p.MipMaps)
+
+			var ktxData bytes.Buffer
+			if err := ktx.Write(&ktxData); err != nil {
+				t.Fatalf("KTX Write: %v", err)
+			}
+			readKTX, err := bcn.ReadKTX(bytes.NewReader(ktxData.Bytes()))
+			if err != nil {
+				t.Fatalf("ReadKTX: %v", err)
+			}
+			assertExportedMipmaps(t, readKTX.Format, readKTX.Faces, tt.format, p.MipMaps)
+		})
+	}
+}
+
+func assertExportedMipmaps(t *testing.T, gotFormat bcn.Format, faces []bcn.Face, wantFormat bcn.Format, wantMips []*MipMap) {
+	t.Helper()
+
+	if gotFormat != wantFormat {
+		t.Fatalf("format = %v, want %v", gotFormat, wantFormat)
+	}
+	if len(faces) != 1 {
+		t.Fatalf("faces = %d, want 1", len(faces))
+	}
+	if len(faces[0].Mipmaps) != len(wantMips) {
+		t.Fatalf("mipmaps = %d, want %d", len(faces[0].Mipmaps), len(wantMips))
+	}
+
+	for i := range wantMips {
+		if !bytes.Equal(faces[0].Mipmaps[i], wantMips[i].Data) {
+			t.Fatalf("mipmap[%d] payload differs", i)
+		}
+	}
+}
+
 func TestDecodePAA_InvalidMagic(t *testing.T) {
 	_, err := DecodePAA(bytes.NewReader([]byte{0, 0}))
 	if err == nil {

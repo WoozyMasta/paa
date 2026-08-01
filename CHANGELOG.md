@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## Unreleased
+
+### Added
+
+* Zero-copy DDS/KTX export support for `PaxARGBA5` (`RGBA5551`)
+  and `PaxARGB8` (`BGRA8`), preserving all mip payloads.
+
 ## [0.4.0][] - 2026-06-21
 
 ### Added
