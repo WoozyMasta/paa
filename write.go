@@ -26,7 +26,9 @@ func Encode(w io.Writer, img image.Image) error {
 // EncodeWithOptions writes the image as PAA with a single mip level.
 // If opts is nil, behavior is the same as Encode (auto DXT1/DXT5 by alpha).
 // If opts.NormalMapSwizzle is true, normal-map swizzle is applied per mip and format is DXT5 (for _nohq).
-// If opts.Type is set (e.g. PaxDXT1, PaxDXT5), that format is used; otherwise format is chosen by alpha.
+// If opts.Type is set (e.g. PaxDXT1, PaxDXT3, PaxDXT5), that format is used;
+// otherwise format is chosen by alpha.
+// Premultiplied-alpha DXT2 and DXT4 are not supported for encoding.
 func EncodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions) error {
 	return (&Encoder{}).encodeWithOptions(w, img, opts, nil)
 }
@@ -81,6 +83,12 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 			Type:       paxType,
 			MipHeaders: make([]MipHeader, 0, 16),
 		}
+	}
+	if paxType == PaxDXT2 || paxType == PaxDXT4 {
+		if statsDone != nil {
+			<-statsDone
+		}
+		return ErrUnsupportedFormat
 	}
 
 	// Mipmap options (defaults mimic BI: full chain down to 4x4).
@@ -184,9 +192,16 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		useLZ := false
 
 		if isDXT(paxType) {
-			format := bcn.FormatDXT1
-			if paxType == PaxDXT5 {
+			var format bcn.Format
+			switch paxType {
+			case PaxDXT1:
+				format = bcn.FormatDXT1
+			case PaxDXT3:
+				format = bcn.FormatDXT3
+			case PaxDXT5:
 				format = bcn.FormatDXT5
+			default:
+				return ErrUnsupportedFormat
 			}
 
 			var encErr error

@@ -31,7 +31,9 @@ type EncodeOptions struct {
 	// LZSSSearchLimit controls the LZSS backward-match window for non-DXT payloads.
 	// 0 uses the default (2048); valid range is 1–4096.
 	LZSSSearchLimit int
-	// Type is the PAA pixel format (PaxDXT1, PaxDXT5, etc.).
+	// Type is the PAA pixel format. Encoding supports PaxDXT1, PaxDXT3, PaxDXT5
+	// and the supported uncompressed formats;
+	// PaxDXT2 and PaxDXT4 are rejected because they require premultiplied-alpha conversion.
 	// Zero value means auto: DXT5 if image has any non-opaque alpha, else DXT1.
 	Type PaxType
 	// SwizzleTag is the SWIZTAGG payload to write when WriteSwizzleTag is true.

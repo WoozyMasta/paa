@@ -6,10 +6,61 @@ package paa
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/color"
 	"testing"
 )
+
+func TestEncodeDXT3UsesBC2Payload(t *testing.T) {
+	img := encoderTestImage(8, 8, true)
+	noMips := false
+
+	var buf bytes.Buffer
+	if err := EncodeWithOptions(&buf, img, &EncodeOptions{Type: PaxDXT3, GenerateMipmaps: &noMips}); err != nil {
+		t.Fatalf("EncodeWithOptions: %v", err)
+	}
+
+	p, err := DecodePAA(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("DecodePAA: %v", err)
+	}
+	if p.Type != PaxDXT3 {
+		t.Fatalf("PAA type = %v, want %v", p.Type, PaxDXT3)
+	}
+	if len(p.MipMaps) != 1 {
+		t.Fatalf("mipmaps = %d, want 1", len(p.MipMaps))
+	}
+	if got, want := len(p.MipMaps[0].Data), 64; got != want {
+		t.Fatalf("DXT3 payload = %d bytes, want %d", got, want)
+	}
+	if _, err := p.MipMaps[0].Image(); err != nil {
+		t.Fatalf("decode DXT3 mip: %v", err)
+	}
+}
+
+func TestEncodeRejectsPremultipliedDXT(t *testing.T) {
+	img := encoderTestImage(8, 8, true)
+
+	for _, tt := range []struct {
+		name    string
+		paxType PaxType
+	}{
+		{name: "DXT2", paxType: PaxDXT2},
+		{name: "DXT4", paxType: PaxDXT4},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			err := EncodeWithOptions(&buf, img, &EncodeOptions{Type: tt.paxType})
+			if !errors.Is(err, ErrUnsupportedFormat) {
+				t.Fatalf("EncodeWithOptions error = %v, want ErrUnsupportedFormat", err)
+			}
+			if buf.Len() != 0 {
+				t.Fatalf("encoded %d bytes before rejecting %v", buf.Len(), tt.paxType)
+			}
+		})
+	}
+}
 
 func encoderTestImage(w, h int, alpha bool) *image.NRGBA {
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))

@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning][].
 * Zero-copy DDS/KTX export support for `PaxARGBA5` (`RGBA5551`)
   and `PaxARGB8` (`BGRA8`), preserving all mip payloads.
 
+### Fixed
+
+* `PaxDXT3` encoding to use BC2 payloads;
+  `PaxDXT2` and `PaxDXT4` encoding now return `ErrUnsupportedFormat`
+  until premultiplied-alpha conversion is implemented.
+
 ## [0.4.0][] - 2026-06-21
 
 ### Added
