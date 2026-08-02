@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
-## Unreleased
+## [0.5.0][] - 2026-08-02
 
 ### Added
 
@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning][].
 * Сoncurrent reads of custom `image.Image` implementations
   during encoding by snapshotting non-NRGBA inputs and waiting
   for the stats worker on all error paths.
+
+[0.5.0]: https://github.com/WoozyMasta/paa/compare/v0.4.0...v0.5.0
 
 ## [0.4.0][] - 2026-06-21
 
