@@ -318,7 +318,10 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 		if dLen > 0xFFFFFF {
 			return ErrMipDataTooLarge
 		}
-		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dLen); err != nil { //nolint:gosec // range-checked above.
+
+		dataLen := uint32(dLen) //nolint:gosec // range-checked above.
+
+		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dataLen); err != nil { //nolint:gosec // range-checked above.
 			return err
 		}
 		if _, err := w.Write(m.data); err != nil {

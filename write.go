@@ -407,7 +407,9 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 			return ErrMipDataTooLarge
 		}
 
-		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dLen); err != nil { //nolint:gosec // range-checked above.
+		dataLen := uint32(dLen) //nolint:gosec // range-checked above.
+
+		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dataLen); err != nil { //nolint:gosec // range-checked above.
 			return err
 		}
 
@@ -439,13 +441,13 @@ func writeGGATTag(w io.Writer, name string, payload []byte) error {
 }
 
 // writeMipHeader writes the fixed width, height, and 24-bit payload-size fields.
-func writeMipHeader(w io.Writer, width, height uint16, dataLen int) error {
+func writeMipHeader(w io.Writer, width, height uint16, dataLen uint32) error {
 	var header [7]byte
+	var size [4]byte
 	binary.LittleEndian.PutUint16(header[0:2], width)
 	binary.LittleEndian.PutUint16(header[2:4], height)
-	header[4] = byte(dataLen)
-	header[5] = byte(dataLen >> 8)
-	header[6] = byte(dataLen >> 16)
+	binary.LittleEndian.PutUint32(size[:], dataLen)
+	copy(header[4:], size[:3])
 	_, err := w.Write(header[:])
 	return err
 }
