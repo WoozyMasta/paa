@@ -150,6 +150,100 @@ func readGGATTags(r io.Reader) (map[string][]byte, error) {
 	return tags, nil
 }
 
+// firstMipTags stores only the GGAT data required to decode the first mip.
+type firstMipTags struct {
+	offsets     [16]uint32
+	offsetCount int
+	swizzle     [4]byte
+	hasSwizzle  bool
+}
+
+// readFirstMipTags parses the SFFO offsets and optional ZIWS tag
+// without retaining unrelated GGAT payloads.
+func readFirstMipTags(r io.Reader) (firstMipTags, error) {
+	var tags firstMipTags
+	tagCount := 0
+	for {
+		var sig [4]byte
+		if _, err := io.ReadFull(r, sig[:]); err != nil {
+			return firstMipTags{}, err
+		}
+		if sig != [4]byte{'G', 'G', 'A', 'T'} {
+			break
+		}
+
+		tagCount++
+		if tagCount > maxGGATTags {
+			return firstMipTags{}, ErrTooManyTags
+		}
+
+		var name [4]byte
+		if _, err := io.ReadFull(r, name[:]); err != nil {
+			return firstMipTags{}, err
+		}
+
+		var size uint32
+		if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
+			return firstMipTags{}, err
+		}
+		if err := checkGGATTagSize(r, name[:], size); err != nil {
+			return firstMipTags{}, err
+		}
+
+		switch name {
+		case [4]byte{'S', 'F', 'F', 'O'}:
+			offsets, count, err := readSFFOOffsetsFixed(r, size)
+			if err != nil {
+				return firstMipTags{}, err
+			}
+			tags.offsets = offsets
+			tags.offsetCount = count
+		case [4]byte{'Z', 'I', 'W', 'S'}:
+			ok, err := readTagPrefixAndDiscard(r, size, tags.swizzle[:])
+			if err != nil {
+				return firstMipTags{}, err
+			}
+			tags.hasSwizzle = ok
+		default:
+			if err := discardN(r, int64(size)); err != nil {
+				return firstMipTags{}, err
+			}
+		}
+	}
+
+	if tags.offsetCount == 0 {
+		return firstMipTags{}, ErrMissingSFFO
+	}
+
+	return tags, nil
+}
+
+// readSFFOOffsetsFixed returns up to the 16 SFFO offsets defined by the PAA format.
+func readSFFOOffsetsFixed(r io.Reader, size uint32) ([16]uint32, int, error) {
+	var offsets [16]uint32
+	count := 0
+	var raw [4]byte
+	remaining := size
+	for i := 0; i < len(offsets) && remaining >= 4; i++ {
+		if _, err := io.ReadFull(r, raw[:]); err != nil {
+			return offsets, 0, err
+		}
+		remaining -= 4
+
+		if offset := binary.LittleEndian.Uint32(raw[:]); offset != 0 && count < len(offsets) {
+			offsets[count] = offset
+			count++
+		}
+	}
+	if remaining > 0 {
+		if err := discardN(r, int64(remaining)); err != nil {
+			return offsets, 0, err
+		}
+	}
+
+	return offsets, count, nil
+}
+
 // checkGGATTagSize validates a GGAT payload against configured and input bounds.
 func checkGGATTagSize(r io.Reader, name []byte, size uint32) error {
 	if size > maxGGATTagBytes {

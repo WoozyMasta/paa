@@ -57,17 +57,12 @@ func (d *Decoder) DecodeWithOptions(r io.Reader, opts *DecodeOptions) (image.Ima
 		return nil, err
 	}
 
-	tags, err := readGGATTags(r)
+	tags, err := readFirstMipTags(r)
 	if err != nil {
 		return nil, err
 	}
 
-	offsets, err := sffoOffsets(tags)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, offset := range offsets {
+	for _, offset := range tags.offsets[:tags.offsetCount] {
 		if _, err := seeker.Seek(int64(offset), io.SeekStart); err != nil {
 			return nil, err
 		}
@@ -80,7 +75,7 @@ func (d *Decoder) DecodeWithOptions(r io.Reader, opts *DecodeOptions) (image.Ima
 			continue
 		}
 
-		return applySwizzleTag(tags, pType, img), nil
+		return applyFirstMipSwizzle(tags, pType, img), nil
 	}
 
 	return nil, ErrNoMipmaps

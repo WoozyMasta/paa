@@ -83,6 +83,37 @@ func TestReadMipMapWithLimitRejectsBeforePayloadAllocation(t *testing.T) {
 	}
 }
 
+func TestReadFirstMipTags(t *testing.T) {
+	var sffo [64]byte
+	binary.LittleEndian.PutUint32(sffo[0:4], 96)
+	binary.LittleEndian.PutUint32(sffo[4:8], 128)
+
+	var data bytes.Buffer
+	writeGGAT := func(name string, payload []byte) {
+		data.WriteString("GGAT")
+		data.WriteString(name)
+		var size [4]byte
+		binary.LittleEndian.PutUint32(size[:], uint32(len(payload)))
+		data.Write(size[:])
+		data.Write(payload)
+	}
+	writeGGAT("ZIWS", []byte{0x05, 0x04, 0x02, 0x03})
+	writeGGAT("JUNK", []byte{1, 2, 3})
+	writeGGAT("SFFO", sffo[:])
+	data.Write([]byte{0, 0, 0, 0})
+
+	tags, err := readFirstMipTags(bytes.NewReader(data.Bytes()))
+	if err != nil {
+		t.Fatalf("readFirstMipTags: %v", err)
+	}
+	if !tags.hasSwizzle || tags.swizzle != [4]byte{0x05, 0x04, 0x02, 0x03} {
+		t.Fatalf("ZIWS = %v, has=%v", tags.swizzle, tags.hasSwizzle)
+	}
+	if tags.offsetCount != 2 || tags.offsets[0] != 96 || tags.offsets[1] != 128 {
+		t.Fatalf("SFFO offsets = %v, count=%d", tags.offsets, tags.offsetCount)
+	}
+}
+
 type ggatEntry struct {
 	name string
 	size uint32

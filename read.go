@@ -31,7 +31,7 @@ func DecodeWithOptions(r io.Reader, opts *DecodeOptions) (image.Image, error) {
 		return nil, err
 	}
 
-	return applySwizzleTag(tags, pType, img), nil
+	return applyFirstMipSwizzle(tags, pType, img), nil
 }
 
 // DecodeConfig reads only the dimensions of the first mip level.
@@ -50,36 +50,31 @@ func DecodeConfig(r io.Reader) (image.Config, error) {
 }
 
 // readFirstMipMap reads headers/tags and returns the first non-dummy mip map only.
-func readFirstMipMap(r io.Reader) (PaxType, map[string][]byte, *MipMap, error) {
+func readFirstMipMap(r io.Reader) (PaxType, firstMipTags, *MipMap, error) {
 	var err error
 	r, seeker, err := ensureSeeker(r)
 	if err != nil {
-		return 0, nil, nil, err
+		return 0, firstMipTags{}, nil, err
 	}
 
 	pType, err := readPaxType(r)
 	if err != nil {
-		return 0, nil, nil, err
+		return 0, firstMipTags{}, nil, err
 	}
 
-	tags, err := readGGATTags(r)
+	tags, err := readFirstMipTags(r)
 	if err != nil {
-		return 0, nil, nil, err
+		return 0, firstMipTags{}, nil, err
 	}
 
-	offsets, err := sffoOffsets(tags)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-
-	for _, offset := range offsets {
+	for _, offset := range tags.offsets[:tags.offsetCount] {
 		if _, err := seeker.Seek(int64(offset), io.SeekStart); err != nil {
-			return 0, nil, nil, err
+			return 0, firstMipTags{}, nil, err
 		}
 
 		mm, err := readMipMap(r, pType)
 		if err != nil {
-			return 0, nil, nil, err
+			return 0, firstMipTags{}, nil, err
 		}
 
 		if mm == nil {
@@ -89,7 +84,7 @@ func readFirstMipMap(r io.Reader) (PaxType, map[string][]byte, *MipMap, error) {
 		return pType, tags, mm, nil
 	}
 
-	return 0, nil, nil, ErrNoMipmaps
+	return 0, firstMipTags{}, nil, ErrNoMipmaps
 }
 
 // readFirstMipHeader reads only width/height for the first non-dummy mip map.
@@ -105,17 +100,12 @@ func readFirstMipHeader(r io.Reader) (uint16, uint16, error) {
 		return 0, 0, err
 	}
 
-	tags, err := readGGATTags(r)
+	tags, err := readFirstMipTags(r)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	offsets, err := sffoOffsets(tags)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	for _, offset := range offsets {
+	for _, offset := range tags.offsets[:tags.offsetCount] {
 		if _, err := seeker.Seek(int64(offset), io.SeekStart); err != nil {
 			return 0, 0, err
 		}
@@ -151,6 +141,23 @@ func applySwizzleTag(tags map[string][]byte, pType PaxType, img image.Image) ima
 
 	var swiz [4]byte
 	copy(swiz[:], tag)
+	return applySwizzlePayloadTag(swiz, pType, img)
+}
+
+// applyFirstMipSwizzle applies the optional ZIWS payload retained by the fast parser.
+func applyFirstMipSwizzle(tags firstMipTags, pType PaxType, img image.Image) image.Image {
+	if !tags.hasSwizzle || pType != PaxDXT5 {
+		return img
+	}
+
+	return applySwizzlePayloadTag(tags.swizzle, pType, img)
+}
+
+// applySwizzlePayloadTag applies a validated ZIWS payload to a DXT5 image.
+func applySwizzlePayloadTag(swiz [4]byte, pType PaxType, img image.Image) image.Image {
+	if pType != PaxDXT5 {
+		return img
+	}
 	if swiz == swizzleDXT5NM {
 		return unswizzleNormalMap(img)
 	}
@@ -165,10 +172,10 @@ func applySwizzleTag(tags map[string][]byte, pType PaxType, img image.Image) ima
 // DecodePAA reads a full PAA structure from the stream.
 //
 // File layout: 2-byte magic (PaxType), then GGAT tags (name + size + payload).
-// The SFFO tag holds a table of absolute file offsets to each mip level; we seek
-// to each offset and read the mip (width, height, length, payload). If r does
-// not implement io.Seeker, the entire stream is read into memory first so that
-// we can seek (e.g. for image.Decode which may pass a non-seekable reader).
+// The SFFO tag holds a table of absolute file offsets to each mip level;
+// we seek to each offset and read the mip (width, height, length, payload).
+// If r does not implement io.Seeker, the entire stream is read into memory first
+// so that we can seek (e.g. for image.Decode which may pass a non-seekable reader).
 func DecodePAA(r io.Reader) (*PAA, error) {
 	var err error
 	r, seeker, err := ensureSeeker(r)

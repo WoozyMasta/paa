@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning][].
   512 MiB input and decoded mip-chain budgets,
   16 MiB per GGAT tag, and a maximum of 64 GGAT tags.
 
+### Changed
+
+* Reduced allocations in `Decode`, `DecodeConfig`, and reusable `Decoder.Decode`
+  by parsing only SFFO and ZIWS GGAT data required for first-mip decoding.
+
 ### Fixed
 
 * `PaxDXT3` encoding to use BC2 payloads;
