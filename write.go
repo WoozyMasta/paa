@@ -284,23 +284,6 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		return err
 	}
 
-	// Write tag in canonical order: GGAT, NAME, LEN, DATA.
-	writeTag := func(name string, payload []byte) error {
-		if _, err := w.Write([]byte("GGAT")); err != nil {
-			return err
-		}
-		if _, err := w.Write([]byte(name)); err != nil {
-			return err
-		}
-		if err := binary.Write(w, binary.LittleEndian, uint32(len(payload))); err != nil { //nolint:gosec // G115
-			return err
-		}
-		if _, err := w.Write(payload); err != nil {
-			return err
-		}
-		return nil
-	}
-
 	if statsDone != nil {
 		<-statsDone
 	}
@@ -323,10 +306,10 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		meta.HasMaxColor = true
 		meta.MaxColor = maxTag
 	}
-	if err := writeTag("CGVA", avgTag[:]); err != nil {
+	if err := writeGGATTag(w, "CGVA", avgTag[:]); err != nil {
 		return err
 	}
-	if err := writeTag("CXAM", maxTag[:]); err != nil {
+	if err := writeGGATTag(w, "CXAM", maxTag[:]); err != nil {
 		return err
 	}
 
@@ -336,12 +319,12 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 			meta.HasGALF = true
 			meta.GALF = uint32(galfValue)
 		}
-		if err := writeTag("GALF", []byte{galfValue, 0, 0, 0}); err != nil {
+		if err := writeGGATTag(w, "GALF", []byte{galfValue, 0, 0, 0}); err != nil {
 			return err
 		}
 	}
 	if writeZIWS {
-		if err := writeTag("ZIWS", ziwsTag[:]); err != nil {
+		if err := writeGGATTag(w, "ZIWS", ziwsTag[:]); err != nil {
 			return err
 		}
 	}
@@ -357,7 +340,7 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 	offset += 76 + 2
 	baseOffset := uint32(offset) //nolint:gosec // G115
 
-	sffo := make([]byte, 64)
+	var sffo [64]byte
 	// Fill offsets for each mip (max 16 entries), relative to file start.
 	off := int(baseOffset)
 	for i := 0; i < len(mips) && i < 16; i++ {
@@ -365,7 +348,7 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		off += 2 + 2 + 3 + len(mips[i].data)
 	}
 	if meta != nil {
-		offsets, err := sffoOffsetsRaw(sffo)
+		offsets, err := sffoOffsetsRaw(sffo[:])
 		if err != nil {
 			return err
 		}
@@ -389,7 +372,7 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 			})
 		}
 	}
-	if err := writeTag("SFFO", sffo); err != nil {
+	if err := writeGGATTag(w, "SFFO", sffo[:]); err != nil {
 		return err
 	}
 
@@ -418,23 +401,13 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		if m.h > 0xffff {
 			return ErrInvalidDimensions
 		}
-		if err := binary.Write(w, binary.LittleEndian, uint16(storedW)); err != nil { //nolint:gosec // G115
-			return err
-		}
-		if err := binary.Write(w, binary.LittleEndian, uint16(m.h)); err != nil { //nolint:gosec // G115
-			return err
-		}
-
 		// Data length is stored as-is, no LZO flag.
 		dLen := len(m.data)
 		if dLen > 0xFFFFFF {
 			return ErrMipDataTooLarge
 		}
 
-		var dLenBuf [4]byte
-		// #nosec G115 -- dLen is range-checked to 24-bit above.
-		binary.LittleEndian.PutUint32(dLenBuf[:], uint32(dLen))
-		if _, err := w.Write(dLenBuf[:3]); err != nil {
+		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dLen); err != nil { //nolint:gosec // range-checked above.
 			return err
 		}
 
@@ -449,6 +422,32 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 	}
 
 	return nil
+}
+
+// writeGGATTag writes one canonical GGAT tag header and payload.
+func writeGGATTag(w io.Writer, name string, payload []byte) error {
+	var header [12]byte
+	copy(header[0:4], "GGAT")
+	copy(header[4:8], name)
+	binary.LittleEndian.PutUint32(header[8:12], uint32(len(payload))) //nolint:gosec // PAA tag payload sizes fit uint32.
+	if _, err := w.Write(header[:]); err != nil {
+		return err
+	}
+
+	_, err := w.Write(payload)
+	return err
+}
+
+// writeMipHeader writes the fixed width, height, and 24-bit payload-size fields.
+func writeMipHeader(w io.Writer, width, height uint16, dataLen int) error {
+	var header [7]byte
+	binary.LittleEndian.PutUint16(header[0:2], width)
+	binary.LittleEndian.PutUint16(header[2:4], height)
+	header[4] = byte(dataLen)
+	header[5] = byte(dataLen >> 8)
+	header[6] = byte(dataLen >> 16)
+	_, err := w.Write(header[:])
+	return err
 }
 
 // imageStats calculates per-image average and maximum channel values.

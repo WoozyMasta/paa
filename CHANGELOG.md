@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning][].
 
 * Reduced allocations in `Decode`, `DecodeConfig`, and reusable `Decoder.Decode`
   by parsing only SFFO and ZIWS GGAT data required for first-mip decoding.
+* Reduced allocations in PAA encoding
+  by writing GGAT and mip headers with fixed binary buffers.
 
 ### Fixed
 

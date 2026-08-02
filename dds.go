@@ -258,34 +258,20 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 		return err
 	}
 
-	writeTag := func(name string, payload []byte) error {
-		if _, err := w.Write([]byte("GGAT")); err != nil {
-			return err
-		}
-		if _, err := w.Write([]byte(name)); err != nil {
-			return err
-		}
-		if err := binary.Write(w, binary.LittleEndian, uint32(len(payload))); err != nil { //nolint:gosec // G115
-			return err
-		}
-		_, err := w.Write(payload)
-		return err
-	}
-
 	// CGVA: zeros (pixel data not available); CXAM: 0xFF (BI DXT convention).
-	if err := writeTag("CGVA", []byte{0, 0, 0, 0}); err != nil {
+	if err := writeGGATTag(w, "CGVA", []byte{0, 0, 0, 0}); err != nil {
 		return err
 	}
-	if err := writeTag("CXAM", []byte{0xFF, 0xFF, 0xFF, 0xFF}); err != nil {
+	if err := writeGGATTag(w, "CXAM", []byte{0xFF, 0xFF, 0xFF, 0xFF}); err != nil {
 		return err
 	}
 	if writeGALF {
-		if err := writeTag("GALF", []byte{galfValue, 0, 0, 0}); err != nil {
+		if err := writeGGATTag(w, "GALF", []byte{galfValue, 0, 0, 0}); err != nil {
 			return err
 		}
 	}
 	if writeZIWS {
-		if err := writeTag("ZIWS", ziwsTag[:]); err != nil {
+		if err := writeGGATTag(w, "ZIWS", ziwsTag[:]); err != nil {
 			return err
 		}
 	}
@@ -300,13 +286,13 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 	}
 	headerSize += 76 + 2 // SFFO tag (12 + 64) + end marker
 
-	sffo := make([]byte, 64)
+	var sffo [64]byte
 	off := headerSize
 	for i := 0; i < len(mips) && i < 16; i++ {
 		binary.LittleEndian.PutUint32(sffo[i*4:], uint32(off)) //nolint:gosec // G115: offset fits uint32 for valid PAA files
 		off += 2 + 2 + 3 + len(mips[i].data)
 	}
-	if err := writeTag("SFFO", sffo); err != nil {
+	if err := writeGGATTag(w, "SFFO", sffo[:]); err != nil {
 		return err
 	}
 	if _, err := w.Write([]byte{0, 0}); err != nil {
@@ -328,20 +314,11 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 			return ErrInvalidDimensions
 		}
 
-		if err := binary.Write(w, binary.LittleEndian, uint16(storedW)); err != nil { //nolint:gosec // G115: range-checked above
-			return err
-		}
-		if err := binary.Write(w, binary.LittleEndian, uint16(m.h)); err != nil { //nolint:gosec // G115: range-checked above
-			return err
-		}
-
 		dLen := len(m.data)
 		if dLen > 0xFFFFFF {
 			return ErrMipDataTooLarge
 		}
-		var dLenBuf [4]byte
-		binary.LittleEndian.PutUint32(dLenBuf[:], uint32(dLen)) //nolint:gosec // G115: range-checked above
-		if _, err := w.Write(dLenBuf[:3]); err != nil {
+		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dLen); err != nil { //nolint:gosec // range-checked above.
 			return err
 		}
 		if _, err := w.Write(m.data); err != nil {
