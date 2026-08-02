@@ -249,6 +249,28 @@ func TestToKTXPreservesMipmaps(t *testing.T) {
 	}
 }
 
+func TestToDDSAndKTXRejectNilMipmaps(t *testing.T) {
+	valid := &MipMap{Type: PaxDXT1, Width: 4, Height: 4, Data: make([]byte, 8)}
+	tests := []struct {
+		name string
+		p    *PAA
+	}{
+		{name: "first", p: &PAA{Type: PaxDXT1, MipMaps: []*MipMap{nil}}},
+		{name: "later", p: &PAA{Type: PaxDXT1, MipMaps: []*MipMap{valid, nil}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := tt.p.ToDDS(); !errors.Is(err, ErrNilMipMap) {
+				t.Fatalf("ToDDS error = %v, want ErrNilMipMap", err)
+			}
+			if _, err := tt.p.ToKTX(); !errors.Is(err, ErrNilMipMap) {
+				t.Fatalf("ToKTX error = %v, want ErrNilMipMap", err)
+			}
+		})
+	}
+}
+
 func TestToDDSAndKTXPreserveUncompressedMipmaps(t *testing.T) {
 	img := image.NewNRGBA(image.Rect(0, 0, 32, 32))
 	for y := 0; y < 32; y++ {

@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning][].
 * `PaxDXT3` encoding to use BC2 payloads;
   `PaxDXT2` and `PaxDXT4` encoding now return `ErrUnsupportedFormat`
   until premultiplied-alpha conversion is implemented.
+* `ToDDS` and `ToKTX` to return `ErrNilMipMap`
+  for invalid PAA mip chains instead of panic or emitting shifted mip levels.
 
 ## [0.4.0][] - 2026-06-21
 

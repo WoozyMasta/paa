@@ -90,13 +90,18 @@ func paaDirectMipChain(p *PAA) (bcn.Format, int, int, [][]byte, error) {
 		return bcn.FormatUnknown, 0, 0, nil, ErrUnsupportedFormat
 	}
 
-	width := int(p.MipMaps[0].Width)   //nolint:gosec // mip dimensions are uint16 by format.
-	height := int(p.MipMaps[0].Height) //nolint:gosec // mip dimensions are uint16 by format.
+	base := p.MipMaps[0]
+	if base == nil {
+		return bcn.FormatUnknown, 0, 0, nil, ErrNilMipMap
+	}
+
+	width := int(base.Width)   //nolint:gosec // mip dimensions are uint16 by format.
+	height := int(base.Height) //nolint:gosec // mip dimensions are uint16 by format.
 	mips := make([][]byte, 0, len(p.MipMaps))
 
 	for _, mm := range p.MipMaps {
 		if mm == nil {
-			continue
+			return bcn.FormatUnknown, 0, 0, nil, ErrNilMipMap
 		}
 
 		expected := expectedMipSize(p.Type, int(mm.Width), int(mm.Height)) //nolint:gosec // mip dimensions are uint16 by format.

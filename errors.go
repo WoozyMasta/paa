@@ -12,6 +12,8 @@ var (
 	ErrNilPAA = errors.New("paa: nil PAA")
 	// ErrNoMipmaps is returned when no mipmaps are found in the PAA file.
 	ErrNoMipmaps = errors.New("paa: no mipmaps found")
+	// ErrNilMipMap is returned when a PAA mip chain contains a nil mipmap.
+	ErrNilMipMap = errors.New("paa: nil mipmap")
 	// ErrInvalidMagic is returned when the magic/format is invalid.
 	ErrInvalidMagic = errors.New("paa: invalid magic/format")
 	// ErrMissingSFFO is returned when the SFFO tag is missing.
