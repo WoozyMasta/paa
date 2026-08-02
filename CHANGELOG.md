@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning][].
   until premultiplied-alpha conversion is implemented.
 * `ToDDS` and `ToKTX` to return `ErrNilMipMap`
   for invalid PAA mip chains instead of panic or emitting shifted mip levels.
+* Сoncurrent reads of custom `image.Image` implementations
+  during encoding by snapshotting non-NRGBA inputs and waiting
+  for the stats worker on all error paths.
 
 ## [0.4.0][] - 2026-06-21
 

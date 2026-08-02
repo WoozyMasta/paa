@@ -44,9 +44,12 @@ func EncodeWithOptionsAndMetadataHeaders(w io.Writer, img image.Image, opts *Enc
 func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *MetadataHeaders) error {
 	statImg := img
 
-	// imageStats only feeds the CGVA/CXAM tags, which are written after the heavier mip + BCn + LZO pipeline.
-	// When the output type does not depend on hasAlpha,
-	// run the (serial) stats scan concurrently with that pipeline and join before the tags.
+	// image.Image does not guarantee that concurrent At calls are safe.
+	// Snapshot non-NRGBA inputs before running the stats scan alongside mip generation.
+	if _, ok := img.(*image.NRGBA); !ok {
+		statImg = toNRGBA(img)
+	}
+
 	var (
 		avgR, avgG, avgB, avgA uint64
 		maxR, maxG, maxB, maxA uint8
@@ -62,6 +65,7 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 			computeStats()
 			close(statsDone)
 		}()
+		defer func() { <-statsDone }()
 	} else {
 		// hasAlpha is needed now to choose the type.
 		computeStats()
@@ -85,9 +89,6 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		}
 	}
 	if paxType == PaxDXT2 || paxType == PaxDXT4 {
-		if statsDone != nil {
-			<-statsDone
-		}
 		return ErrUnsupportedFormat
 	}
 
@@ -300,7 +301,6 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		return nil
 	}
 
-	// Join the concurrent stats scan before reading/overriding avg*/max*.
 	if statsDone != nil {
 		<-statsDone
 	}

@@ -9,8 +9,44 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
+
+func TestEncodeDoesNotReadImageConcurrently(t *testing.T) {
+	img := &serializedImage{Image: encoderTestImage(64, 64, true)}
+	noMips := false
+
+	var buf bytes.Buffer
+	if err := EncodeWithOptions(&buf, img, &EncodeOptions{Type: PaxDXT5, GenerateMipmaps: &noMips}); err != nil {
+		t.Fatalf("EncodeWithOptions: %v", err)
+	}
+	if img.concurrent.Load() {
+		t.Fatal("EncodeWithOptions called image.At concurrently")
+	}
+}
+
+type serializedImage struct {
+	image.Image
+	mu         sync.Mutex
+	concurrent atomic.Bool
+}
+
+func (img *serializedImage) At(x, y int) color.Color {
+	if !img.mu.TryLock() {
+		img.concurrent.Store(true)
+		img.mu.Lock()
+	}
+	defer img.mu.Unlock()
+
+	for range 32 {
+		runtime.Gosched()
+	}
+
+	return img.Image.At(x, y)
+}
 
 func TestEncodeDXT3UsesBC2Payload(t *testing.T) {
 	img := encoderTestImage(8, 8, true)
