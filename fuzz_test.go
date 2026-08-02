@@ -38,10 +38,21 @@ func FuzzDecode(f *testing.F) {
 		// None of these must panic on arbitrary input.
 		_, _ = Decode(bytes.NewReader(data))
 		_, _ = DecodeConfig(bytes.NewReader(data))
+		_, _ = DecodeNthMip(bytes.NewReader(data), 0, nil)
+		_, _ = DecodeNthMip(bytes.NewReader(data), -1, nil)
 		_, _ = DecodeMetadata(bytes.NewReader(data))
 		_, _ = DecodeMetadataBytes(data)
-		_, _ = DecodePAA(bytes.NewReader(data))
+		_, _ = DecodeMetadataHeaders(bytes.NewReader(data))
+		_, _ = DecodeMetadataHeadersBytes(data)
 		_, _ = dec.Decode(bytes.NewReader(data))
+		_, _ = dec.DecodeMetadataHeaders(bytes.NewReader(data))
+
+		p, err := DecodePAA(bytes.NewReader(data))
+		if err == nil {
+			_, _ = p.AllImages(nil)
+			_, _ = p.ToDDS()
+			_, _ = p.ToKTX()
+		}
 	})
 }
 
