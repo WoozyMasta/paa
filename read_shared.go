@@ -12,6 +12,10 @@ import (
 )
 
 const (
+	// maxSFFOOffsets is the number of mip offsets represented by the PAA format.
+	maxSFFOOffsets = 16
+	// maxSFFOBytes is the maximum canonical SFFO payload size.
+	maxSFFOBytes = maxSFFOOffsets * 4
 	// maxPAAInputBytes bounds buffered non-seekable inputs and seekable PAA files.
 	// It accommodates a full 8192x8192 RGBA8 texture plus its mip chain.
 	maxPAAInputBytes int64 = 512 << 20
@@ -152,7 +156,7 @@ func readGGATTags(r io.Reader) (map[string][]byte, error) {
 
 // firstMipTags stores only the GGAT data required to decode the first mip.
 type firstMipTags struct {
-	offsets     [16]uint32
+	offsets     [maxSFFOOffsets]uint32
 	offsetCount int
 	swizzle     [4]byte
 	hasSwizzle  bool
@@ -219,8 +223,12 @@ func readFirstMipTags(r io.Reader) (firstMipTags, error) {
 }
 
 // readSFFOOffsetsFixed returns up to the 16 SFFO offsets defined by the PAA format.
-func readSFFOOffsetsFixed(r io.Reader, size uint32) ([16]uint32, int, error) {
-	var offsets [16]uint32
+func readSFFOOffsetsFixed(r io.Reader, size uint32) ([maxSFFOOffsets]uint32, int, error) {
+	var offsets [maxSFFOOffsets]uint32
+	if err := validateSFFOSize(uint64(size)); err != nil {
+		return offsets, 0, err
+	}
+
 	count := 0
 	var raw [4]byte
 	remaining := size
@@ -246,11 +254,29 @@ func readSFFOOffsetsFixed(r io.Reader, size uint32) ([16]uint32, int, error) {
 
 // checkGGATTagSize validates a GGAT payload against configured and input bounds.
 func checkGGATTagSize(r io.Reader, name []byte, size uint32) error {
+	if string(name) == "SFFO" {
+		if err := validateSFFOSize(uint64(size)); err != nil {
+			return err
+		}
+	}
+
 	if size > maxGGATTagBytes {
 		return fmt.Errorf("%w: tag %q size %d, limit %d", ErrTagTooLarge, name, size, maxGGATTagBytes)
 	}
 	if rem, ok := remainingBytes(r); ok && int64(size) > rem {
 		return fmt.Errorf("%w: tag %q size %d, %d remain", ErrTagSizeExceedsInput, name, size, rem)
+	}
+
+	return nil
+}
+
+// validateSFFOSize rejects offset tables that exceed the format's 16 entries.
+func validateSFFOSize(size uint64) error {
+	if size > maxSFFOBytes {
+		return fmt.Errorf("%w: SFFO size %d, limit %d", ErrTagTooLarge, size, maxSFFOBytes)
+	}
+	if size%4 != 0 {
+		return fmt.Errorf("%w: SFFO size %d is not a multiple of 4", ErrInvalidSFFO, size)
 	}
 
 	return nil
@@ -269,6 +295,13 @@ func sffoOffsets(tags map[string][]byte) ([]uint32, error) {
 
 // sffoOffsetsRaw returns non-zero offsets from raw SFFO payload.
 func sffoOffsetsRaw(sffo []byte) ([]uint32, error) {
+	if len(sffo) > maxSFFOBytes {
+		return nil, fmt.Errorf("%w: SFFO size %d, limit %d", ErrTagTooLarge, len(sffo), maxSFFOBytes)
+	}
+	if err := validateSFFOSize(uint64(len(sffo))); err != nil {
+		return nil, err
+	}
+
 	out := make([]uint32, 0, len(sffo)/4)
 	for i := 0; i+4 <= len(sffo); i += 4 {
 		v := binary.LittleEndian.Uint32(sffo[i : i+4])

@@ -18,6 +18,8 @@ var (
 	ErrInvalidMagic = errors.New("paa: invalid magic/format")
 	// ErrMissingSFFO is returned when the SFFO tag is missing.
 	ErrMissingSFFO = errors.New("paa: missing SFFO tag")
+	// ErrInvalidSFFO is returned when the SFFO offset table has an invalid size.
+	ErrInvalidSFFO = errors.New("paa: invalid SFFO offset table")
 	// ErrInsufficientData is returned when there is not enough data for ARGB8.
 	ErrInsufficientData = errors.New("paa: not enough data for ARGB8")
 	// ErrUnsupportedPixelFmt is returned when the pixel format is unsupported for decode.

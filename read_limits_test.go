@@ -114,6 +114,58 @@ func TestReadFirstMipTags(t *testing.T) {
 	}
 }
 
+// TestSFFOParsersEnforceCanonicalSize checks the common 16-entry SFFO limit.
+func TestSFFOParsersEnforceCanonicalSize(t *testing.T) {
+	var validSFFO [maxSFFOBytes]byte
+	for i := range maxSFFOOffsets {
+		binary.LittleEndian.PutUint32(validSFFO[i*4:], uint32(128+i*4))
+	}
+
+	validData := paaWithSFFO(validSFFO[:])
+	tags, err := readFirstMipTags(bytes.NewReader(validData[2:]))
+	if err != nil {
+		t.Fatalf("readFirstMipTags with 16 offsets: %v", err)
+	}
+	if tags.offsetCount != maxSFFOOffsets {
+		t.Fatalf("offset count = %d, want %d", tags.offsetCount, maxSFFOOffsets)
+	}
+
+	invalidCases := []struct {
+		name string
+		data []byte
+		want error
+	}{
+		{name: "oversized", data: make([]byte, maxSFFOBytes+4), want: ErrTagTooLarge},
+		{name: "misaligned", data: make([]byte, maxSFFOBytes-1), want: ErrInvalidSFFO},
+	}
+	for _, tt := range invalidCases {
+		t.Run(tt.name, func(t *testing.T) {
+			data := paaWithSFFO(tt.data)
+			if _, err := readFirstMipTags(bytes.NewReader(data[2:])); !errors.Is(err, tt.want) {
+				t.Fatalf("readFirstMipTags error = %v, want %v", err, tt.want)
+			}
+
+			if _, err := DecodeMetadata(bytes.NewReader(data)); !errors.Is(err, tt.want) {
+				t.Fatalf("DecodeMetadata error = %v, want %v", err, tt.want)
+			}
+			if _, err := DecodeMetadataHeaders(bytes.NewReader(data)); !errors.Is(err, tt.want) {
+				t.Fatalf("DecodeMetadataHeaders error = %v, want %v", err, tt.want)
+			}
+			if _, err := Decode(bytes.NewReader(data)); !errors.Is(err, tt.want) {
+				t.Fatalf("Decode error = %v, want %v", err, tt.want)
+			}
+
+			dec := NewDecoder()
+			if _, err := dec.DecodeMetadataHeaders(bytes.NewReader(data)); !errors.Is(err, tt.want) {
+				t.Fatalf("Decoder.DecodeMetadataHeaders error = %v, want %v", err, tt.want)
+			}
+			if cap(dec.sffo) > maxSFFOBytes || len(dec.sffo) != 0 {
+				t.Fatalf("reusable SFFO buffer grew before rejection: len=%d cap=%d", len(dec.sffo), cap(dec.sffo))
+			}
+		})
+	}
+}
+
 type ggatEntry struct {
 	name string
 	size uint32
@@ -153,6 +205,22 @@ func paaWithGGATs(tags []ggatEntry) []byte {
 		binary.LittleEndian.PutUint32(size[:], tag.size)
 		out.Write(size[:])
 	}
+	out.Write([]byte{0, 0, 0, 0})
+
+	return out.Bytes()
+}
+
+// paaWithSFFO builds a minimal PAA header with one SFFO tag for parser tests.
+func paaWithSFFO(payload []byte) []byte {
+	var out bytes.Buffer
+	out.Write(PaxDXT1.Bytes())
+	out.WriteString("GGAT")
+	out.WriteString("SFFO")
+
+	var size [4]byte
+	binary.LittleEndian.PutUint32(size[:], uint32(len(payload)))
+	out.Write(size[:])
+	out.Write(payload)
 	out.Write([]byte{0, 0, 0, 0})
 
 	return out.Bytes()

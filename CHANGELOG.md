@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## Unreleased
+
+### Fixed
+
+* Reject SFFO tables with more than 16 offsets or incomplete offset entries
+  before reading or allocating their payloads.
+
 ## [0.5.0][] - 2026-08-02
 
 ### Added
