@@ -42,6 +42,23 @@ func EncodeWithOptionsAndMetadataHeaders(w io.Writer, img image.Image, opts *Enc
 // encodeWithOptions performs the full encode flow and optionally fills metadata,
 // reusing the Encoder's buffers across calls.
 func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOptions, meta *MetadataHeaders) error {
+	width, height, err := validateImageBounds(img)
+	if err != nil {
+		return err
+	}
+
+	preflightType := PaxDXT1
+	if opts != nil {
+		if opts.Type != 0 {
+			preflightType = opts.Type
+		} else if opts.NormalMapSwizzle {
+			preflightType = PaxDXT5
+		}
+	}
+	if err := validateMipDimensions(preflightType, width, height); err != nil {
+		return err
+	}
+
 	statImg := img
 
 	// image.Image does not guarantee that concurrent At calls are safe.
@@ -82,10 +99,15 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 	default:
 		paxType = PaxDXT1
 	}
+
+	if err := validateMipDimensions(paxType, width, height); err != nil {
+		return err
+	}
+
 	if meta != nil {
 		*meta = MetadataHeaders{
 			Type:       paxType,
-			MipHeaders: make([]MipHeader, 0, 16),
+			MipHeaders: make([]MipHeader, 0, maxSFFOOffsets),
 		}
 	}
 	if paxType == PaxDXT2 || paxType == PaxDXT4 {
@@ -278,6 +300,9 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		})
 	}
 	mips := e.mips
+	if err := validateMipBlocks(paxType, mips); err != nil {
+		return err
+	}
 
 	// Write PaxType as first tag.
 	if _, err := w.Write(paxType.Bytes()); err != nil {
@@ -343,10 +368,11 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 	var sffo [64]byte
 	// Fill offsets for each mip (max 16 entries), relative to file start.
 	off := int(baseOffset)
-	for i := 0; i < len(mips) && i < 16; i++ {
+	for i := 0; i < len(mips) && i < maxSFFOOffsets; i++ {
 		binary.LittleEndian.PutUint32(sffo[i*4:i*4+4], uint32(off)) //nolint:gosec // G115
 		off += 2 + 2 + 3 + len(mips[i].data)
 	}
+
 	if meta != nil {
 		offsets, err := sffoOffsetsRaw(sffo[:])
 		if err != nil {
@@ -357,9 +383,7 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 			if i >= len(mips) {
 				break
 			}
-			if mips[i].w < 0 || mips[i].w > 0xFFFF || mips[i].h < 0 || mips[i].h > 0xFFFF {
-				return ErrInvalidDimensions
-			}
+
 			// #nosec G115 -- dimensions are range-checked to uint16 bounds above.
 			w16 := uint16(mips[i].w)
 			// #nosec G115 -- dimensions are range-checked to uint16 bounds above.
@@ -381,32 +405,13 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 	}
 
 	for _, m := range mips {
-		// LZO is signaled by width's top bit for this mip only.
-		if m.w < 0 || m.h < 0 {
-			return ErrInvalidDimensions
-		}
-
-		// Width is stored with LZO flag if used.
+		// Width's top bit is reserved for the LZO flag on DXT formats.
 		storedW := m.w
 		if m.useLZ {
-			if m.w > 0x7fff {
-				return ErrInvalidDimensions
-			}
 			storedW = m.w | 0x8000
-		} else if m.w > 0xffff {
-			return ErrInvalidDimensions
 		}
 
-		// Height is always stored as-is, no LZO flag.
-		if m.h > 0xffff {
-			return ErrInvalidDimensions
-		}
-		// Data length is stored as-is, no LZO flag.
 		dLen := len(m.data)
-		if dLen > 0xFFFFFF {
-			return ErrMipDataTooLarge
-		}
-
 		dataLen := uint32(dLen) //nolint:gosec // range-checked above.
 
 		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dataLen); err != nil { //nolint:gosec // range-checked above.

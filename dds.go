@@ -187,8 +187,14 @@ func EncodeFromKTX(w io.Writer, ktx *bcn.KTX, opts *EncodeOptions) error {
 // encodePAAFromCompressedBlocks writes a PAA from pre-compressed BCn mip blocks.
 // CGVA is zeroed (pixel data unavailable); CXAM is 0xFF (BI convention for DXT).
 func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height int, mipmaps [][]byte, opts *EncodeOptions) error {
-	if width <= 0 || height <= 0 {
-		return ErrInvalidDimensions
+	if len(mipmaps) > maxSFFOOffsets {
+		return ErrTooManyMipmaps
+	}
+	if len(mipmaps) == 0 {
+		return ErrNoMipmaps
+	}
+	if err := validateMipDimensions(paxType, width, height); err != nil {
+		return err
 	}
 
 	useLZO := opts != nil && opts.UseLZO && isDXT(paxType)
@@ -211,13 +217,7 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 	}
 
 	// Validate block sizes and optionally apply LZO per mip.
-	type mipEntry struct {
-		data  []byte
-		w, h  int
-		useLZ bool
-	}
-
-	mips := make([]mipEntry, 0, len(mipmaps))
+	mips := make([]mipBlock, 0, len(mipmaps))
 	mw, mh := width, height
 	for _, raw := range mipmaps {
 		expected := expectedMipSize(paxType, mw, mh)
@@ -240,7 +240,7 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 			}
 		}
 
-		mips = append(mips, mipEntry{data: data, w: mw, h: mh, useLZ: useLZ})
+		mips = append(mips, mipBlock{data: data, w: mw, h: mh, useLZ: useLZ})
 		if mw > 1 {
 			mw >>= 1
 		}
@@ -251,6 +251,9 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 
 	if len(mips) == 0 {
 		return ErrNoMipmaps
+	}
+	if err := validateMipBlocks(paxType, mips); err != nil {
+		return err
 	}
 
 	// Write PaxType magic.
@@ -288,7 +291,7 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 
 	var sffo [64]byte
 	off := headerSize
-	for i := 0; i < len(mips) && i < 16; i++ {
+	for i := 0; i < len(mips) && i < maxSFFOOffsets; i++ {
 		binary.LittleEndian.PutUint32(sffo[i*4:], uint32(off)) //nolint:gosec // G115: offset fits uint32 for valid PAA files
 		off += 2 + 2 + 3 + len(mips[i].data)
 	}
@@ -303,22 +306,10 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 	for _, m := range mips {
 		storedW := m.w
 		if m.useLZ {
-			if m.w > 0x7FFF {
-				return ErrInvalidDimensions
-			}
 			storedW = m.w | 0x8000
-		} else if m.w > 0xFFFF {
-			return ErrInvalidDimensions
-		}
-		if m.h > 0xFFFF {
-			return ErrInvalidDimensions
 		}
 
 		dLen := len(m.data)
-		if dLen > 0xFFFFFF {
-			return ErrMipDataTooLarge
-		}
-
 		dataLen := uint32(dLen) //nolint:gosec // range-checked above.
 
 		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dataLen); err != nil { //nolint:gosec // range-checked above.

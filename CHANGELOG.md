@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning][].
 
 * Reject SFFO tables with more than 16 offsets or incomplete offset entries
   before reading or allocating their payloads.
+* Reject unrepresentable mip dimensions, payload sizes,
+  and mip counts before writing PAA headers.
 
 ## [0.5.0][] - 2026-08-02
 
