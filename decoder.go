@@ -89,6 +89,7 @@ func (d *Decoder) readMipImage(r io.Reader, paxType PaxType, opts *DecodeOptions
 	if _, err := io.ReadFull(r, hdr[:]); err != nil {
 		return nil, false, err
 	}
+
 	w := binary.LittleEndian.Uint16(hdr[0:2])
 	h := binary.LittleEndian.Uint16(hdr[2:4])
 	if w == 0 && h == 0 {
@@ -130,11 +131,14 @@ func (d *Decoder) readMipImage(r io.Reader, paxType PaxType, opts *DecodeOptions
 
 	var raw []byte
 	switch {
-	case storedSize == expectedRaw:
-		raw = d.payload
 	case isDXT(paxType):
 		if !lzoFlag {
-			return nil, false, ErrInsufficientData
+			if storedSize != expectedRaw {
+				return nil, false, ErrInsufficientData
+			}
+
+			raw = d.payload
+			break
 		}
 
 		d.raw = ensureLen(d.raw, expectedRaw)
@@ -145,13 +149,22 @@ func (d *Decoder) readMipImage(r io.Reader, paxType PaxType, opts *DecodeOptions
 		if nRead != len(d.payload) {
 			return nil, false, errors.Join(ErrLZODecompress, fmt.Errorf("%w: consumed %d of %d bytes", ErrLZOTrailingInput, nRead, len(d.payload)))
 		}
+		if len(dec) != expectedRaw {
+			return nil, false, errors.Join(ErrLZODecompress, fmt.Errorf("decoded %d bytes, want %d", len(dec), expectedRaw))
+		}
+
 		raw = dec
+
+	case storedSize == expectedRaw:
+		raw = d.payload
+
 	default:
 		// Non-DXT LZSS (rare): allocates per call.
 		dec, derr := lzss.Decompress(d.payload, expectedRaw, lzss.SignedLenientOptions())
 		if derr != nil {
 			return nil, false, errors.Join(ErrLZSSDecompress, derr)
 		}
+
 		raw = dec
 	}
 

@@ -68,6 +68,7 @@ func readMipMapWithLimit(r io.Reader, paxType PaxType, rawLimit int) (*MipMap, e
 	if err := binary.Read(r, binary.LittleEndian, &h); err != nil {
 		return nil, err
 	}
+
 	if w == 0 && h == 0 {
 		return nil, nil
 	}
@@ -88,6 +89,7 @@ func readMipMapWithLimit(r io.Reader, paxType PaxType, rawLimit int) (*MipMap, e
 	if _, err := io.ReadFull(r, sizeBuf[:]); err != nil {
 		return nil, err
 	}
+
 	storedSize := int(sizeBuf[0]) | int(sizeBuf[1])<<8 | int(sizeBuf[2])<<16
 	expectedRaw := expectedMipSize(paxType, int(width), int(height))
 	if expectedRaw < 0 {
@@ -109,12 +111,13 @@ func readMipMapWithLimit(r io.Reader, paxType PaxType, rawLimit int) (*MipMap, e
 
 	var raw []byte
 	switch {
-	case storedSize == expectedRaw:
-		raw = payload
 	case isDXT(paxType):
-		// DXT: only LZO when top bit of width is set.
 		if !lzoFlag {
-			return nil, ErrInsufficientData
+			if storedSize != expectedRaw {
+				return nil, ErrInsufficientData
+			}
+			raw = payload
+			break
 		}
 
 		lzoDst := make([]byte, expectedRaw)
@@ -126,14 +129,22 @@ func readMipMapWithLimit(r io.Reader, paxType PaxType, rawLimit int) (*MipMap, e
 		if nRead != len(payload) {
 			return nil, errors.Join(ErrLZODecompress, fmt.Errorf("%w: consumed %d of %d bytes", ErrLZOTrailingInput, nRead, len(payload)))
 		}
+		if len(dec) != expectedRaw {
+			return nil, errors.Join(ErrLZODecompress, fmt.Errorf("decoded %d bytes, want %d", len(dec), expectedRaw))
+		}
 
 		raw = dec
+
+	case storedSize == expectedRaw:
+		raw = payload
+
 	default:
 		// Non-DXT: LZSS (signed checksum, lenient).
 		dec, err := lzss.Decompress(payload, expectedRaw, lzss.SignedLenientOptions())
 		if err != nil {
 			return nil, errors.Join(ErrLZSSDecompress, err)
 		}
+
 		raw = dec
 	}
 

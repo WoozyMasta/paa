@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning][].
   before reading or allocating their payloads.
 * Reject unrepresentable mip dimensions, payload sizes,
   and mip counts before writing PAA headers.
+* Honor the DXT LZO width flag
+  and require exact compressed input and output lengths.
 
 ## [0.5.0][] - 2026-08-02
 
