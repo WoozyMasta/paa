@@ -89,10 +89,31 @@ type TextureHint struct {
 // Clone returns a deep copy of the config.
 func (c TexConvertConfig) Clone() TexConvertConfig {
 	out := TexConvertConfig{
-		ConvertVersion: c.ConvertVersion,
-		Hints:          make([]TextureHint, len(c.Hints)),
+		ConvertVersion:           c.ConvertVersion,
+		ApplyDefaultErrorMetrics: c.ApplyDefaultErrorMetrics,
+		UseSRGBFromDynRange:      c.UseSRGBFromDynRange,
+		DisableAutoReduce:        c.DisableAutoReduce,
+		DisableLZO:               c.DisableLZO,
+		Hints:                    make([]TextureHint, len(c.Hints)),
 	}
 	copy(out.Hints, c.Hints)
+	for i := range out.Hints {
+		out.Hints[i].EnableDXT = cloneBool(c.Hints[i].EnableDXT)
+		out.Hints[i].DynRange = cloneBool(c.Hints[i].DynRange)
+		out.Hints[i].AutoReduce = cloneBool(c.Hints[i].AutoReduce)
+		out.Hints[i].VirtualSwz = cloneBool(c.Hints[i].VirtualSwz)
+		out.Hints[i].Dithering = cloneBool(c.Hints[i].Dithering)
+	}
 
 	return out
+}
+
+// cloneBool returns an independent copy of value, preserving nil.
+func cloneBool(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+
+	cloned := *value
+	return &cloned
 }

@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning][].
   and mip counts before writing PAA headers.
 * Honor the DXT LZO width flag
   and require exact compressed input and output lengths.
+* Deep-copy TexConvertConfig global options and pointer-backed hint flags.
 
 ## [0.5.0][] - 2026-08-02
 
