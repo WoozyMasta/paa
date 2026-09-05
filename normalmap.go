@@ -19,7 +19,7 @@ var swizzleDXT5NM = [4]byte{0x05, 0x04, 0x02, 0x03}
 // We want (X,Y,Z,255) => store R=0, G=Y, B=Z, A=255-X.
 func swizzleNormalMap(img image.Image) image.Image {
 	bounds := img.Bounds()
-	dst := image.NewRGBA(bounds)
+	dst := image.NewNRGBA(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
 
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
@@ -41,12 +41,11 @@ func swizzleNormalMap(img image.Image) image.Image {
 			}
 			z8 := b8
 
-			dst.SetRGBA(x, y, color.RGBA{
-				R: 0,        // A_display = 255 - R = 255
-				G: g8,       // Y
-				B: z8,       // Z
-				A: 255 - r8, // X; R_display = 255 - A = X
-			})
+			off := (y-bounds.Min.Y)*dst.Stride + (x-bounds.Min.X)*4
+			dst.Pix[off+0] = 0        // A_display = 255 - R = 255
+			dst.Pix[off+1] = g8       // Y
+			dst.Pix[off+2] = z8       // Z
+			dst.Pix[off+3] = 255 - r8 // X; R_display = 255 - A = X
 		}
 	}
 

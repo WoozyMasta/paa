@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning][].
 * Honor the DXT LZO width flag
   and require exact compressed input and output lengths.
 * Deep-copy TexConvertConfig global options and pointer-backed hint flags.
+* Preserve straight-alpha normal-map swizzle channels before BCn encoding.
 
 ## [0.5.0][] - 2026-08-02
 
