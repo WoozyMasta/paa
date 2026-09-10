@@ -171,9 +171,12 @@ func applySwizzlePayload(img image.Image, tag [4]byte) *image.NRGBA {
 			for i := range 4 {
 				t := tag[i]
 				var v uint8
-				if (t & 0x08) != 0 {
+				switch t {
+				case 0x08:
 					v = 0xFF
-				} else {
+				case 0x09:
+					v = 0
+				default:
 					v = get(so, t)
 					if (t & 0x04) != 0 {
 						v = 255 - v
@@ -198,7 +201,7 @@ func applySwizzlePayload(img image.Image, tag [4]byte) *image.NRGBA {
 }
 
 // applyADSHQSwizzle decodes ADSHQ-style swizzle (tag 02 09 03 09) into a viewable image.
-// This maps A -> G (ambient), copies G into B, sets R to 0, and preserves alpha.
+// This maps A -> G (ambient), stored G -> B, sets R to 0, and restores opaque alpha.
 func applyADSHQSwizzle(img image.Image) *image.NRGBA {
 	src := toNRGBA(img)
 	b := src.Bounds()
@@ -209,11 +212,12 @@ func applyADSHQSwizzle(img image.Image) *image.NRGBA {
 		for x := 0; x < b.Dx(); x++ {
 			so := srow + x*4
 			do := drow + x*4
-			a := src.Pix[so+3]
-			dst.Pix[do+0] = 0 // R
-			dst.Pix[do+1] = a // G <- A
-			dst.Pix[do+2] = a // B <- G
-			dst.Pix[do+3] = a // A
+			storedG := src.Pix[so+1]
+			storedA := src.Pix[so+3]
+			dst.Pix[do+0] = 0       // R
+			dst.Pix[do+1] = storedA // G <- A
+			dst.Pix[do+2] = storedG // B <- stored G
+			dst.Pix[do+3] = 255     // A
 		}
 	}
 
