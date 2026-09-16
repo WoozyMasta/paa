@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning][].
 * Deep-copy TexConvertConfig global options and pointer-backed hint flags.
 * Preserve straight-alpha normal-map swizzle channels before BCn encoding.
 * Correct ZIWS constant-zero selectors and ADSHQ channel reconstruction.
+* Validate public mipmap dimensions and exact payload sizes before decoding.
 
 ## [0.5.0][] - 2026-08-02
 

@@ -6,6 +6,7 @@ package paa
 
 import (
 	"encoding/binary"
+	"fmt"
 	"image"
 )
 
@@ -13,15 +14,25 @@ import (
 // Used for non-DXT formats (ARGB8, ARGB1555, ARGB4444, GRAYA).
 // PAA stores ARGB8 as BGRA in memory; we swap to R,G,B,A for image.NRGBA.
 func decodePixelFormat(format PaxType, rawData []byte, width, height int, img *image.NRGBA) error {
-	w, h := width, height
+	if err := validateMipDimensions(format, width, height); err != nil {
+		return err
+	}
+	if err := checkMipBudget(width, height); err != nil {
+		return err
+	}
+
+	expected := expectedMipSize(format, width, height)
+	if expected < 0 {
+		return ErrUnsupportedPixelFmt
+	}
+	if len(rawData) != expected {
+		return fmt.Errorf("%w: pixel payload %d, want %d", ErrInsufficientData, len(rawData), expected)
+	}
+
+	totalPixels := width * height
 
 	switch format {
 	case PaxARGB8:
-		totalPixels := w * h
-		if len(rawData) < totalPixels*4 {
-			return ErrInsufficientData
-		}
-
 		for i := range totalPixels {
 			off := i * 4
 			img.Pix[off+0] = rawData[off+2] // B -> R
@@ -31,7 +42,7 @@ func decodePixelFormat(format PaxType, rawData []byte, width, height int, img *i
 		}
 
 	case PaxARGBA5:
-		for i := 0; i < len(rawData)/2; i++ {
+		for i := range totalPixels {
 			p := binary.LittleEndian.Uint16(rawData[i*2:])
 			a := uint8(0)
 			if (p & 0x8000) != 0 {
@@ -50,7 +61,7 @@ func decodePixelFormat(format PaxType, rawData []byte, width, height int, img *i
 		}
 
 	case PaxARGB4:
-		for i := 0; i < len(rawData)/2; i++ {
+		for i := range totalPixels {
 			p := binary.LittleEndian.Uint16(rawData[i*2:])
 			// 4-bit channels, masked so value fits in uint8
 			img.Pix[i*4+0] = uint8((p & 0x0F) << 4)         //nolint:gosec // G115
@@ -60,11 +71,6 @@ func decodePixelFormat(format PaxType, rawData []byte, width, height int, img *i
 		}
 
 	case PaxGRAYA:
-		totalPixels := w * h
-		if len(rawData) < totalPixels*2 {
-			return ErrInsufficientData
-		}
-
 		for i := range totalPixels {
 			off := i * 2
 			v := rawData[off+0]

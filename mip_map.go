@@ -185,9 +185,24 @@ func (m *MipMap) Image() (image.Image, error) {
 
 // ImageWithOptions decodes the mipmap into an image.Image with optional BCn decode options.
 func (m *MipMap) ImageWithOptions(opts *DecodeOptions) (image.Image, error) {
+	if m == nil {
+		return nil, ErrNilMipMap
+	}
+
 	w, h := int(m.Width), int(m.Height)
-	if w <= 0 || h <= 0 || len(m.Data) == 0 {
-		return nil, ErrInsufficientData
+	if err := validateMipDimensions(m.Type, w, h); err != nil {
+		return nil, err
+	}
+	if err := checkMipBudget(w, h); err != nil {
+		return nil, err
+	}
+
+	expected := expectedMipSize(m.Type, w, h)
+	if expected < 0 {
+		return nil, ErrUnsupportedPixelFmt
+	}
+	if len(m.Data) != expected {
+		return nil, fmt.Errorf("%w: mip payload %d, want %d", ErrInsufficientData, len(m.Data), expected)
 	}
 
 	if isDXT(m.Type) {
