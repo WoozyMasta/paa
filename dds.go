@@ -84,6 +84,9 @@ func paaDirectMipChain(p *PAA) (bcn.Format, int, int, [][]byte, error) {
 	if len(p.MipMaps) == 0 {
 		return bcn.FormatUnknown, 0, 0, nil, ErrNoMipmaps
 	}
+	if len(p.MipMaps) > maxSFFOOffsets {
+		return bcn.FormatUnknown, 0, 0, nil, ErrTooManyMipmaps
+	}
 
 	format := paxToBcnFormat(p.Type)
 	if format == bcn.FormatUnknown {
@@ -98,10 +101,18 @@ func paaDirectMipChain(p *PAA) (bcn.Format, int, int, [][]byte, error) {
 	width := int(base.Width)   //nolint:gosec // mip dimensions are uint16 by format.
 	height := int(base.Height) //nolint:gosec // mip dimensions are uint16 by format.
 	mips := make([][]byte, 0, len(p.MipMaps))
+	blocks := make([]mipBlock, 0, len(p.MipMaps))
+	mw, mh := width, height
 
 	for _, mm := range p.MipMaps {
 		if mm == nil {
 			return bcn.FormatUnknown, 0, 0, nil, ErrNilMipMap
+		}
+		if err := validateMipDimensions(p.Type, int(mm.Width), int(mm.Height)); err != nil {
+			return bcn.FormatUnknown, 0, 0, nil, err
+		}
+		if int(mm.Width) != mw || int(mm.Height) != mh {
+			return bcn.FormatUnknown, 0, 0, nil, ErrInvalidDimensions
 		}
 
 		expected := expectedMipSize(p.Type, int(mm.Width), int(mm.Height)) //nolint:gosec // mip dimensions are uint16 by format.
@@ -113,11 +124,20 @@ func paaDirectMipChain(p *PAA) (bcn.Format, int, int, [][]byte, error) {
 			return bcn.FormatUnknown, 0, 0, nil, ErrInsufficientData
 		}
 
-		mips = append(mips, append([]byte(nil), mm.Data...))
+		blocks = append(blocks, mipBlock{data: mm.Data, w: mw, h: mh})
+		if mw > 1 {
+			mw >>= 1
+		}
+		if mh > 1 {
+			mh >>= 1
+		}
 	}
 
-	if len(mips) == 0 {
-		return bcn.FormatUnknown, 0, 0, nil, ErrNoMipmaps
+	if err := validateMipBlocks(p.Type, blocks); err != nil {
+		return bcn.FormatUnknown, 0, 0, nil, err
+	}
+	for _, block := range blocks {
+		mips = append(mips, append([]byte(nil), block.data...))
 	}
 
 	return format, width, height, mips, nil
@@ -230,13 +250,10 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 
 		data, useLZ := raw, false
 		if useLZO {
-			var lzoOpts *lzo.CompressOptions
-			if opts != nil && opts.LZOLevel > 1 {
-				lzoOpts = &lzo.CompressOptions{Level: opts.LZOLevel}
-			}
-			comp, err := lzo.CompressInto(raw, make([]byte, lzo.MaxCompressedSize(len(raw))), lzoOpts)
-			if err == nil && len(comp) < len(raw) {
-				data, useLZ = comp, true
+			var err error
+			data, useLZ, err = compressDirectMip(raw, opts, lzo.CompressInto)
+			if err != nil {
+				return fmt.Errorf("compress mip %dx%d with LZO: %w", mw, mh, err)
 			}
 		}
 
@@ -292,7 +309,8 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 	var sffo [64]byte
 	off := headerSize
 	for i := 0; i < len(mips) && i < maxSFFOOffsets; i++ {
-		binary.LittleEndian.PutUint32(sffo[i*4:], uint32(off)) //nolint:gosec // G115: offset fits uint32 for valid PAA files
+		//nolint:gosec // G115: offset fits uint32 for valid PAA files
+		binary.LittleEndian.PutUint32(sffo[i*4:], uint32(off))
 		off += 2 + 2 + 3 + len(mips[i].data)
 	}
 	if err := writeGGATTag(w, "SFFO", sffo[:]); err != nil {
@@ -312,7 +330,8 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 		dLen := len(m.data)
 		dataLen := uint32(dLen) //nolint:gosec // range-checked above.
 
-		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dataLen); err != nil { //nolint:gosec // range-checked above.
+		//nolint:gosec // range-checked above.
+		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dataLen); err != nil {
 			return err
 		}
 		if _, err := w.Write(m.data); err != nil {
@@ -323,4 +342,26 @@ func encodePAAFromCompressedBlocks(w io.Writer, paxType PaxType, width, height i
 	// Trailing padding (matches BI tool output).
 	_, err := w.Write([]byte{0, 0, 0, 0, 0, 0})
 	return err
+}
+
+// compressDirectMip compresses a validated BCn mip and uses raw blocks when compression is not smaller.
+func compressDirectMip(
+	raw []byte,
+	opts *EncodeOptions,
+	compress func([]byte, []byte, *lzo.CompressOptions) ([]byte, error),
+) ([]byte, bool, error) {
+	var lzoOpts *lzo.CompressOptions
+	if opts != nil && opts.LZOLevel > 1 {
+		lzoOpts = &lzo.CompressOptions{Level: opts.LZOLevel}
+	}
+
+	comp, err := compress(raw, make([]byte, lzo.MaxCompressedSize(len(raw))), lzoOpts)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(comp) >= len(raw) {
+		return raw, false, nil
+	}
+
+	return comp, true, nil
 }
