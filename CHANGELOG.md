@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning][].
 * Correct ZIWS constant-zero selectors and ADSHQ channel reconstruction.
 * Validate public mipmap dimensions and exact payload sizes before decoding.
 * Validate direct DDS/KTX mip chains and propagate LZO compression errors.
+* Enable DXT3 selection through TexConfig encoding.
 
 ## [0.5.0][] - 2026-08-02
 

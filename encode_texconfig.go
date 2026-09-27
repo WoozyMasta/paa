@@ -15,8 +15,8 @@ import (
 )
 
 // EncodeWithTexConfig resolves filename-based settings from a TexConvert config
-// and encodes the image using those settings. If no hint matches, it falls back
-// to EncodeWithOptions with auto format selection.
+// and encodes the image using those settings.
+// If no hint matches, it falls back to EncodeWithOptions with auto format selection.
 func EncodeWithTexConfig(w io.Writer, img image.Image, name string, cfg texconfig.TexConvertConfig) error {
 	return EncodeWithTexConfigOptions(w, img, name, cfg, nil)
 }
@@ -243,11 +243,13 @@ func selectPaxType(stats alphaStats, hint texconfig.TextureHint) (PaxType, error
 	// Supported DXT formats.
 	case texconfig.TexFormatDXT1:
 		return PaxDXT1, nil
+	case texconfig.TexFormatDXT3:
+		return PaxDXT3, nil
 	case texconfig.TexFormatDXT5:
 		return PaxDXT5, nil
 
 	// Unsupported DXT formats.
-	case texconfig.TexFormatDXT2, texconfig.TexFormatDXT3, texconfig.TexFormatDXT4:
+	case texconfig.TexFormatDXT2, texconfig.TexFormatDXT4:
 		return 0, ErrUnsupportedFormat
 
 	// Supported non-DXT formats.
