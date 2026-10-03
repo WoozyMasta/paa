@@ -5,7 +5,6 @@
 package texconfig
 
 import (
-	"path/filepath"
 	"strings"
 )
 
@@ -33,7 +32,7 @@ func Resolve(name string, cfg TexConvertConfig) (TextureHint, bool) {
 
 // ResolveTexConvert resolves a hint by filename using the provided config.
 func ResolveTexConvert(name string, cfg TexConvertConfig) (TextureHint, bool) {
-	base := filepath.Base(name)
+	base := assetBaseName(name)
 	lower := strings.ToLower(base)
 	for _, hint := range cfg.Hints {
 		pattern := strings.ToLower(hint.Pattern)
@@ -47,6 +46,15 @@ func ResolveTexConvert(name string, cfg TexConvertConfig) (TextureHint, bool) {
 	}
 
 	return TextureHint{}, false
+}
+
+// assetBaseName returns the filename after the last separator, independent of host OS.
+func assetBaseName(name string) string {
+	if separator := strings.LastIndexAny(name, `/\`); separator >= 0 {
+		return name[separator+1:]
+	}
+
+	return name
 }
 
 // ResolveTexConvertDefault resolves using the current default config.

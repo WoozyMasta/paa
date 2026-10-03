@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning][].
 * Validate public mipmap dimensions and exact payload sizes before decoding.
 * Validate direct DDS/KTX mip chains and propagate LZO compression errors.
 * Enable DXT3 selection through TexConfig encoding.
+* Resolve TexConfig asset names independently of host path separators.
 
 ## [0.5.0][] - 2026-08-02
 
