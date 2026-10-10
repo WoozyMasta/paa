@@ -204,11 +204,25 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 	e.mips = e.mips[:0]
 	for i, m := range mipImages {
 		encodeImg := m
-		if opts != nil && opts.NormalMapSwizzle {
-			encodeImg = swizzleNormalMap(m)
-		}
-		if opts != nil && opts.Swizzle != nil && !opts.SkipSwizzle {
-			encodeImg = texconfig.ApplyChannelSwizzle(encodeImg, *opts.Swizzle)
+		if opts != nil {
+			applySwizzle := opts.Swizzle != nil && !opts.SkipSwizzle && !opts.Swizzle.IsIdentity()
+			if opts.NormalMapSwizzle || applySwizzle {
+				src, ok := m.(*image.NRGBA)
+				if !ok {
+					src = toNRGBA(m)
+				}
+
+				if opts.NormalMapSwizzle {
+					e.transform = swizzleNormalMapInto(e.transform, src)
+				} else {
+					e.transform = copyNRGBAInto(e.transform, src)
+				}
+				if applySwizzle {
+					applyChannelSwizzleInPlace(e.transform, *opts.Swizzle)
+				}
+
+				encodeImg = e.transform
+			}
 		}
 
 		var data []byte

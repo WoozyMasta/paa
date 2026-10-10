@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning][].
 
 ## Unreleased
 
+### Changed
+
+* Reuse one transform buffer for normal-map and generic channel swizzles,
+  and apply decoded ZIWS transforms in place.
+
 ### Fixed
 
 * Reject SFFO tables with more than 16 offsets or incomplete offset entries

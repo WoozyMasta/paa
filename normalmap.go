@@ -13,20 +13,24 @@ import (
 // swizzleDXT5NM is the SWIZTAGG payload for DXT5 normal maps (_nohq/_nofhq).
 var swizzleDXT5NM = [4]byte{0x05, 0x04, 0x02, 0x03}
 
-// swizzleNormalMap (Encode): Tangent Space RGB (R=X, G=Y, B=Z) -> PAA nohq storage for SWIZTAGG.
-// BIS wiki: *_nohq.paa swizzle = (Alpha negated in R, Red negated in A, G as-is, B as-is).
-// Engine: R_display=255-A_stored, G_display=G_stored, B_display=B_stored, A_display=255-R_stored.
-// We want (X,Y,Z,255) => store R=0, G=Y, B=Z, A=255-X.
-func swizzleNormalMap(img image.Image) image.Image {
-	bounds := img.Bounds()
-	dst := image.NewNRGBA(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
+// swizzleNormalMapInto converts tangent-space RGB (R=X, G=Y, B=Z) to PAA nohq storage channels.
+// The engine reconstructs display channels as R=255-A, G=G, B=B, A=255-R,
+// so storage is R=0, G=Y, B=Z, A=255-X.
+// When Z is lower than the value reconstructed from X and Y, use the reconstructed value.
+func swizzleNormalMapInto(dst, src *image.NRGBA) *image.NRGBA {
+	bounds := src.Bounds()
+	dst = reuseNRGBA(dst, bounds.Dx(), bounds.Dy())
 
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			r, g, b, _ := img.At(x, y).RGBA()
-			r8 := uint8(r >> 8) //nolint:gosec // r is 0..65535
-			g8 := uint8(g >> 8) //nolint:gosec // g is 0..65535
-			b8 := uint8(b >> 8) //nolint:gosec // b is 0..65535
+	for y := 0; y < bounds.Dy(); y++ {
+		srow := y * src.Stride
+		drow := y * dst.Stride
+
+		for x := 0; x < bounds.Dx(); x++ {
+			so := srow + x*4
+			do := drow + x*4
+			r8 := src.Pix[so]
+			g8 := src.Pix[so+1]
+			b8 := src.Pix[so+2]
 
 			nx := (float64(r8)/255.0)*2.0 - 1.0
 			ny := (float64(g8)/255.0)*2.0 - 1.0
@@ -41,11 +45,10 @@ func swizzleNormalMap(img image.Image) image.Image {
 			}
 			z8 := b8
 
-			off := (y-bounds.Min.Y)*dst.Stride + (x-bounds.Min.X)*4
-			dst.Pix[off+0] = 0        // A_display = 255 - R = 255
-			dst.Pix[off+1] = g8       // Y
-			dst.Pix[off+2] = z8       // Z
-			dst.Pix[off+3] = 255 - r8 // X; R_display = 255 - A = X
+			dst.Pix[do+0] = 0        // A_display = 255 - R = 255
+			dst.Pix[do+1] = g8       // Y
+			dst.Pix[do+2] = z8       // Z
+			dst.Pix[do+3] = 255 - r8 // X; R_display = 255 - A = X
 		}
 	}
 
@@ -55,53 +58,26 @@ func swizzleNormalMap(img image.Image) image.Image {
 // unswizzleNormalMap (Decode): PAA nohq (after DXT5 decode) -> Tangent Space RGB.
 // Stored R=0, G=Y, B=Z, A=255-X => X=255-A, Y=G, Z=B.
 func unswizzleNormalMap(img image.Image) image.Image {
-	b := img.Bounds()
-	dst := image.NewNRGBA(b)
-
-	if n, ok := img.(*image.NRGBA); ok {
-		for y := b.Min.Y; y < b.Max.Y; y++ {
-			srow := (y - n.Rect.Min.Y) * n.Stride
-			drow := (y - dst.Rect.Min.Y) * dst.Stride
-			for x := b.Min.X; x < b.Max.X; x++ {
-				so := srow + (x-n.Rect.Min.X)*4
-				do := drow + (x-dst.Rect.Min.X)*4
-
-				g := n.Pix[so+1]
-				bVal := n.Pix[so+2]
-				a := n.Pix[so+3]
-
-				rawX := 255 - a
-				rawY := g
-				rawZ := bVal
-
-				nx := (float64(rawX)/255.0)*2.0 - 1.0
-				ny := (float64(rawY)/255.0)*2.0 - 1.0
-				nz := (float64(rawZ)/255.0)*2.0 - 1.0
-
-				l := math.Sqrt(nx*nx + ny*ny + nz*nz)
-				if l > 0 {
-					nx /= l
-					ny /= l
-					nz /= l
-				}
-
-				dst.Pix[do+0] = uint8(clamp01(nx*0.5+0.5) * 255)
-				dst.Pix[do+1] = uint8(clamp01(ny*0.5+0.5) * 255)
-				dst.Pix[do+2] = uint8(clamp01(nz*0.5+0.5) * 255)
-				dst.Pix[do+3] = 255
-			}
-		}
-
-		return dst
+	n, ok := img.(*image.NRGBA)
+	if !ok {
+		n = toNRGBA(img)
 	}
 
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			c := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+	return unswizzleNormalMapInPlace(n)
+}
 
-			rawX := 255 - c.A
-			rawY := c.G
-			rawZ := c.B
+// unswizzleNormalMapInPlace reconstructs normalized tangent-space channels.
+func unswizzleNormalMapInPlace(img *image.NRGBA) *image.NRGBA {
+	b := img.Bounds()
+
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		row := (y - b.Min.Y) * img.Stride
+		for x := b.Min.X; x < b.Max.X; x++ {
+			off := row + (x-b.Min.X)*4
+			// Cache source channels before writing so the operation is safely in place.
+			rawX := 255 - img.Pix[off+3]
+			rawY := img.Pix[off+1]
+			rawZ := img.Pix[off+2]
 
 			nx := (float64(rawX)/255.0)*2.0 - 1.0
 			ny := (float64(rawY)/255.0)*2.0 - 1.0
@@ -114,16 +90,14 @@ func unswizzleNormalMap(img image.Image) image.Image {
 				nz /= l
 			}
 
-			dst.SetNRGBA(x, y, color.NRGBA{
-				R: uint8(clamp01(nx*0.5+0.5) * 255),
-				G: uint8(clamp01(ny*0.5+0.5) * 255),
-				B: uint8(clamp01(nz*0.5+0.5) * 255),
-				A: 255,
-			})
+			img.Pix[off+0] = uint8(clamp01(nx*0.5+0.5) * 255)
+			img.Pix[off+1] = uint8(clamp01(ny*0.5+0.5) * 255)
+			img.Pix[off+2] = uint8(clamp01(nz*0.5+0.5) * 255)
+			img.Pix[off+3] = 255
 		}
 	}
 
-	return dst
+	return img
 }
 
 // clamp01 clamps the value to the range 0-1.
@@ -146,58 +120,15 @@ func clamp01(f float64) float64 {
 func applySwizzlePayload(img image.Image, tag [4]byte) *image.NRGBA {
 	src := toNRGBA(img)
 	b := src.Bounds()
-	dst := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-
-	get := func(off int, sel uint8) uint8 {
-		switch sel & 0x3 {
-		case 0:
-			return src.Pix[off+3] // A
-		case 1:
-			return src.Pix[off+0] // R
-		case 2:
-			return src.Pix[off+1] // G
-		default:
-			return src.Pix[off+2] // B
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		row := (y - b.Min.Y) * src.Stride
+		for x := b.Min.X; x < b.Max.X; x++ {
+			off := row + (x-b.Min.X)*4
+			applyZIWSPixel(src.Pix[off:off+4], tag)
 		}
 	}
 
-	for y := 0; y < b.Dy(); y++ {
-		srow := y * src.Stride
-		drow := y * dst.Stride
-		for x := 0; x < b.Dx(); x++ {
-			so := srow + x*4
-			do := drow + x*4
-
-			for i := range 4 {
-				t := tag[i]
-				var v uint8
-				switch t {
-				case 0x08:
-					v = 0xFF
-				case 0x09:
-					v = 0
-				default:
-					v = get(so, t)
-					if (t & 0x04) != 0 {
-						v = 255 - v
-					}
-				}
-
-				switch i {
-				case 0:
-					dst.Pix[do+3] = v // A
-				case 1:
-					dst.Pix[do+0] = v // R
-				case 2:
-					dst.Pix[do+1] = v // G
-				case 3:
-					dst.Pix[do+2] = v // B
-				}
-			}
-		}
-	}
-
-	return dst
+	return src
 }
 
 // applyADSHQSwizzle decodes ADSHQ-style swizzle (tag 02 09 03 09) into a viewable image.
@@ -205,23 +136,60 @@ func applySwizzlePayload(img image.Image, tag [4]byte) *image.NRGBA {
 func applyADSHQSwizzle(img image.Image) *image.NRGBA {
 	src := toNRGBA(img)
 	b := src.Bounds()
-	dst := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	for y := 0; y < b.Dy(); y++ {
-		srow := y * src.Stride
-		drow := y * dst.Stride
-		for x := 0; x < b.Dx(); x++ {
-			so := srow + x*4
-			do := drow + x*4
-			storedG := src.Pix[so+1]
-			storedA := src.Pix[so+3]
-			dst.Pix[do+0] = 0       // R
-			dst.Pix[do+1] = storedA // G <- A
-			dst.Pix[do+2] = storedG // B <- stored G
-			dst.Pix[do+3] = 255     // A
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		row := (y - b.Min.Y) * src.Stride
+		for x := b.Min.X; x < b.Max.X; x++ {
+			off := row + (x-b.Min.X)*4
+			storedG := src.Pix[off+1]
+			storedA := src.Pix[off+3]
+			src.Pix[off+0] = 0       // R
+			src.Pix[off+1] = storedA // G <- A
+			src.Pix[off+2] = storedG // B <- stored G
+			src.Pix[off+3] = 255     // A
 		}
 	}
 
-	return dst
+	return src
+}
+
+// applyZIWSPixel transforms one RGBA pixel using A,R,G,B ordered tag bytes.
+func applyZIWSPixel(pixel []byte, tag [4]byte) {
+	r, g, b, a := pixel[0], pixel[1], pixel[2], pixel[3]
+	values := [4]byte{
+		ziwsChannelValue(tag[0], r, g, b, a),
+		ziwsChannelValue(tag[1], r, g, b, a),
+		ziwsChannelValue(tag[2], r, g, b, a),
+		ziwsChannelValue(tag[3], r, g, b, a),
+	}
+	pixel[3], pixel[0], pixel[1], pixel[2] = values[0], values[1], values[2], values[3]
+}
+
+// ziwsChannelValue selects, inverts, or supplies one ZIWS channel value.
+func ziwsChannelValue(tag, r, g, b, a byte) byte {
+	switch tag {
+	case 0x08:
+		return 255
+	case 0x09:
+		return 0
+	}
+
+	var value byte
+	switch tag & 0x03 {
+	case 0:
+		value = a
+	case 1:
+		value = r
+	case 2:
+		value = g
+	case 3:
+		value = b
+	}
+
+	if tag&0x04 != 0 {
+		return 255 - value
+	}
+
+	return value
 }
 
 // toNRGBA converts an image.Image to *image.NRGBA without premultiplication.
