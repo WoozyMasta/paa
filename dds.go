@@ -38,6 +38,8 @@ func DecodeToKTX(r io.Reader) (*bcn.KTX, error) {
 }
 
 // ToDDS converts decoded PAA data into DDS and preserves all mip levels as-is.
+// The exported mip payloads share backing storage with p.MipMaps;
+// callers that need independently mutable payloads must copy them before modification.
 //
 // DXT1-5, ARGB1555, and ARGB8 PAA types are exported without re-encoding.
 // Other PAA formats require explicit pixel decode + re-encode
@@ -57,6 +59,8 @@ func (p *PAA) ToDDS() (*bcn.DDS, error) {
 }
 
 // ToKTX converts decoded PAA data into KTX and preserves all mip levels as-is.
+// The exported mip payloads share backing storage with p.MipMaps;
+// callers that need independently mutable payloads must copy them before modification.
 //
 // DXT1-5, ARGB1555, and ARGB8 PAA types are exported without re-encoding.
 // Other PAA formats require explicit pixel decode + re-encode
@@ -136,8 +140,9 @@ func paaDirectMipChain(p *PAA) (bcn.Format, int, int, [][]byte, error) {
 	if err := validateMipBlocks(p.Type, blocks); err != nil {
 		return bcn.FormatUnknown, 0, 0, nil, err
 	}
+
 	for _, block := range blocks {
-		mips = append(mips, append([]byte(nil), block.data...))
+		mips = append(mips, block.data)
 	}
 
 	return format, width, height, mips, nil

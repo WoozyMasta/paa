@@ -249,6 +249,60 @@ func TestToKTXPreservesMipmaps(t *testing.T) {
 	}
 }
 
+// TestToDDSAndKTXSharePayloads verifies aliasing and that container writes are read-only.
+func TestToDDSAndKTXSharePayloads(t *testing.T) {
+	p := &PAA{Type: PaxDXT5}
+	for _, size := range []int{8, 4} {
+		data := make([]byte, expectedMipSize(PaxDXT5, size, size))
+		for i := range data {
+			data[i] = byte(i*17 + size)
+		}
+		p.MipMaps = append(p.MipMaps, &MipMap{
+			Type: PaxDXT5, Width: uint16(size), Height: uint16(size), Data: data,
+		})
+	}
+	original := make([][]byte, len(p.MipMaps))
+	for i, mip := range p.MipMaps {
+		original[i] = append([]byte(nil), mip.Data...)
+	}
+
+	dds, err := p.ToDDS()
+	if err != nil {
+		t.Fatalf("ToDDS: %v", err)
+	}
+	ktx, err := p.ToKTX()
+	if err != nil {
+		t.Fatalf("ToKTX: %v", err)
+	}
+	for i, mip := range p.MipMaps {
+		if &dds.Faces[0].Mipmaps[i][0] != &mip.Data[0] {
+			t.Errorf("DDS mip %d does not share source payload", i)
+		}
+		if &ktx.Faces[0].Mipmaps[i][0] != &mip.Data[0] {
+			t.Errorf("KTX mip %d does not share source payload", i)
+		}
+	}
+
+	dds.Faces[0].Mipmaps[0][0] ^= 0xff
+	if p.MipMaps[0].Data[0] != dds.Faces[0].Mipmaps[0][0] {
+		t.Fatal("mutating exported DDS payload did not update source PAA payload")
+	}
+	dds.Faces[0].Mipmaps[0][0] = original[0][0]
+
+	var ddsBytes, ktxBytes bytes.Buffer
+	if err := dds.Write(&ddsBytes); err != nil {
+		t.Fatalf("DDS Write: %v", err)
+	}
+	if err := ktx.Write(&ktxBytes); err != nil {
+		t.Fatalf("KTX Write: %v", err)
+	}
+	for i, mip := range p.MipMaps {
+		if !bytes.Equal(mip.Data, original[i]) {
+			t.Errorf("container Write modified source mip %d", i)
+		}
+	}
+}
+
 func TestToDDSAndKTXRejectNilMipmaps(t *testing.T) {
 	valid := &MipMap{Type: PaxDXT1, Width: 4, Height: 4, Data: make([]byte, 8)}
 	tests := []struct {

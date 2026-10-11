@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning][].
 
 ### Changed
 
+* Export DDS/KTX mip payloads by reference to the source PAA mip data.
 * Reuse one transform buffer for normal-map and generic channel swizzles,
   and apply decoded ZIWS transforms in place.
 
