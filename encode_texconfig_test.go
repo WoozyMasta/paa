@@ -11,6 +11,7 @@ import (
 	"image/color"
 	"testing"
 
+	"github.com/woozymasta/bcn"
 	"github.com/woozymasta/paa/texconfig"
 )
 
@@ -83,5 +84,107 @@ func TestEncodeWithTexConfigFormats(t *testing.T) {
 				t.Fatalf("decode first mip: %v", err)
 			}
 		})
+	}
+}
+
+func TestAutoReduceIfNeededMatchesFullMipChain(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		width  int
+		height int
+		limit  int
+	}{
+		{name: "power of two", width: 16, height: 8, limit: 4},
+		{name: "odd dimensions", width: 9, height: 7, limit: 4},
+		{name: "odd dimensions multiple levels", width: 13, height: 9, limit: 3},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			img := image.NewNRGBA(image.Rect(0, 0, tt.width, tt.height))
+			for i := range img.Pix {
+				img.Pix[i] = byte(i*37 + 11)
+			}
+			autoReduce := true
+			hint := texconfig.TextureHint{AutoReduce: &autoReduce, LimitSize: tt.limit}
+			got := autoReduceIfNeeded(img, hint, texconfig.TexConvertConfig{})
+
+			var want image.Image = img
+			for _, mip := range bcn.GenerateMipmaps(img, false) {
+				if mip.Bounds().Dx() <= tt.limit && mip.Bounds().Dy() <= tt.limit {
+					want = mip
+					break
+				}
+			}
+			if got.Bounds() != want.Bounds() {
+				t.Fatalf("reduced bounds = %v, want %v", got.Bounds(), want.Bounds())
+			}
+			if !bytes.Equal(got.(*image.NRGBA).Pix, want.(*image.NRGBA).Pix) {
+				t.Fatal("reduced pixels differ from the matching full-chain mip")
+			}
+		})
+	}
+}
+
+func TestAutoReduceIfNeededNoOpCases(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 16, 8))
+	autoReduce := true
+	noAutoReduce := false
+	for _, tt := range []struct {
+		name string
+		hint texconfig.TextureHint
+		cfg  texconfig.TexConvertConfig
+	}{
+		{
+			name: "within limit",
+			hint: texconfig.TextureHint{AutoReduce: &autoReduce, LimitSize: 16},
+		},
+		{
+			name: "non-positive limit",
+			hint: texconfig.TextureHint{AutoReduce: &autoReduce, LimitSize: 0},
+		},
+		{
+			name: "missing hint",
+			hint: texconfig.TextureHint{LimitSize: 4},
+		},
+		{
+			name: "disabled hint",
+			hint: texconfig.TextureHint{AutoReduce: &noAutoReduce, LimitSize: 4},
+		},
+		{
+			name: "disabled config",
+			hint: texconfig.TextureHint{AutoReduce: &autoReduce, LimitSize: 4},
+			cfg:  texconfig.TexConvertConfig{DisableAutoReduce: true},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := autoReduceIfNeeded(img, tt.hint, tt.cfg); got != img {
+				t.Fatal("autoReduceIfNeeded changed image for a no-op case")
+			}
+		})
+	}
+}
+
+func TestAutoReduceIfNeededPreservesSRGBSelection(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 8, 8))
+	for y := range 8 {
+		for x := range 8 {
+			v := uint8(0)
+			if (x+y)%2 != 0 {
+				v = 255
+			}
+			o := img.PixOffset(x, y)
+			img.Pix[o+0], img.Pix[o+1], img.Pix[o+2], img.Pix[o+3] = v, v, v, 255
+		}
+	}
+
+	autoReduce, dynRange := true, true
+	hint := texconfig.TextureHint{
+		AutoReduce: &autoReduce,
+		DynRange:   &dynRange,
+		LimitSize:  4,
+	}
+	got := autoReduceIfNeeded(img, hint, texconfig.TexConvertConfig{UseSRGBFromDynRange: true})
+	want := bcn.GenerateMipmapsN(img, 2, true)[1]
+	if !bytes.Equal(got.(*image.NRGBA).Pix, want.Pix) {
+		t.Fatal("sRGB-reduced pixels differ from the expected mip")
 	}
 }

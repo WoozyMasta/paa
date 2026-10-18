@@ -289,22 +289,20 @@ func autoReduceIfNeeded(img image.Image, hint texconfig.TextureHint, cfg texconf
 	}
 
 	useSRGB := cfg.UseSRGBFromDynRange && hint.DynRange != nil && *hint.DynRange
-	mips := bcn.GenerateMipmaps(img, useSRGB)
-	// Pick the largest mip that fits within limitSize.
-	var best image.Image
-	for _, m := range mips {
-		bm := m.Bounds()
-		if bm.Dx() <= hint.LimitSize && bm.Dy() <= hint.LimitSize {
-			best = m
-			break
+	w, h := b.Dx(), b.Dy()
+	level := 0
+	for w > hint.LimitSize || h > hint.LimitSize {
+		if w > 1 {
+			w >>= 1
 		}
+		if h > 1 {
+			h >>= 1
+		}
+		level++
 	}
 
-	if best != nil {
-		return best
-	}
-
-	return img
+	mips := bcn.GenerateMipmapsN(img, level+1, useSRGB)
+	return mips[len(mips)-1]
 }
 
 // applyEncodeOverrides applies the overrides to the EncodeOptions.
