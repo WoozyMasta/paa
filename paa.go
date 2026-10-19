@@ -3,111 +3,44 @@
 // Source: github.com/woozymasta/paa
 
 /*
-Package paa reads and writes PAA (Arma/DayZ) texture files.
+Package paa reads and writes PAA texture files for Arma and DayZ.
 
-High-level usage:
-  - DecodePAA reads a full PAA structure (tags + mipmaps).
-  - Decode/DecodeConfig implement image.Decode/image.DecodeConfig.
-  - Encode/EncodeWithOptions write a file with tags + mipmaps.
-  - To register with image.Decode, import the img subpackage:
-    _ "github.com/woozymasta/paa/img".
+See the [PAA File Format reference] for details about the on-disk format.
 
-File structure (simplified):
+[Decode] reads the first mip level as an image;
+[DecodePAA] reads the full texture, including tags and mipmaps.
+[Encode] uses default settings, while [EncodeWithOptions]
+and [EncodeWithTexConfig] allow explicit or filename-based settings.
 
-	[2 bytes pax type] [GGAT tags...] [mipmap blocks...] [0,0,0,0,0,0]
+[Encoder] and [Decoder] reuse buffers across calls.
+Use [Encoder.Reset] or [Decoder.Reset] to release retained memory.
 
-Tags are optional in theory but always present in practice.
-Tag names are stored as four-byte identifiers (e.g. "CGVA", "CXAM", "GALF", "ZIWS", "SFFO")
-and map to avg/max/flags/swizzle/offsets.
-This package writes tags in the canonical order used by BI tools:
-CGVA, CXAM, GALF (optional), ZIWS (optional), SFFO.
+For batch processing, use one encoder or decoder per goroutine
+and parallelize across textures with one BCn worker per call.
+PAA decoding defaults to at most min(GOMAXPROCS, 4) BCn workers
+because its LZO step is serial.
 
-Mipmaps:
-Each mipmap block is:
+To register PAA with [image.Decode] and [image.DecodeConfig],
+blank-import [github.com/woozymasta/paa/img].
 
-	uint16 width, uint16 height, 3-byte size, [size bytes payload]
-
-Some files include a trailing “dummy” mipmap (width=0,height=0),
-but decoding uses SFFO as the authoritative list of mip offsets.
-
-DXT payload size is the *encoded* size (BC1/BC3 blocks), not width*height*4.
-For DXT1: ((w+3)/4)*((h+3)/4)*8
-For DXT5: ((w+3)/4)*((h+3)/4)*16
-
-LZO compression:
-Arma2+ allows per-mip LZO compression for DXT formats.
-The top bit of the mip width indicates LZO-compressed data.
-This package uses per-mip LZO only when it reduces size; otherwise the mip is stored raw.
-Always mask width (width & 0x7FFF) for dimension calculations.
-
-Input safety limits:
-Decoding accepts PAA inputs up to 512 MiB, GGAT tags up to 16 MiB, and at most 64 GGAT tags.
-A fully decoded PAA mip chain is also capped at 512 MiB.
-These limits prevent malformed files from causing unbounded allocations.
-
-SFFO (offset table):
-SFFO contains 16 uint32 offsets to mipmap blocks, relative to file start.
-Only as many entries as actual mip levels are filled; remaining entries are 0.
-The engine can derive offsets without SFFO, but BI tools always write it.
-
-Normal maps (_nohq):
-Arma stores tangent-space normal maps in DXT5 with a swizzle tag:
-
-	SWIZTAGG (ZIWS) = 0x05 0x04 0x02 0x03
-
-Channels are interpreted as:
-
-	stored R=0, G=Y, B=Z, A=255-X
-
-The runtime reconstructs display channels as:
-
-	X = 255 - A, Y = G, Z = B
-
-This package can apply the swizzle on encode (e.g. NormalMapSwizzle or hint‑driven swizzle)
-and will unswizzle on decode when the ZIWS tag matches.
-For some hints we emit ZIWS but intentionally keep payload unswizzled
-to avoid double‑swizzle in external tools.
-
-Important caveat: some external viewers ignore SWIZTAGG and display raw channels,
-which makes _nohq appear incorrect even when the data is valid.
-
-CGVA/CXAM tag order and encoding:
-BI tools write these tags in BGRA order (not RGBA). For _nohq, CXAM is always FF FF FF FF.
-These details affect TexView’s PNG export.
-EncodeWithOptions writes CGVA/CXAM in BGRA and matches BI behavior.
-
-Mipmap defaults:
-EncodeWithOptions generates a full mip chain down to 4x4 (BI default) unless overridden.
-GUI textures often disable mips; use EncodeOptions.GenerateMipmaps=false or MaxMipCount=1.
-
-Format pitfalls and decisions:
-  - Tag order matters for some tools.
-  - SWIZTAGG is required for correct _nohq interpretation.
-  - LZO is per-mip and signaled by width’s top bit.
-  - The file may be valid even if some viewers show wrong colors (swizzle ignored).
-
-See EncodeOptions for knobs controlling quality, swizzle, LZO, and mipmaps.
-
-TexConvert.cfg support:
-The texconfig package provides a default config mirroring BI’s TexConvert.cfg
-and filename-based hint resolution.
+[PAA File Format reference]: https://community.bistudio.com/wiki/PAA_File_Format
 */
 package paa
 
-// PAA represents a .paa texture file (Arma/Bohemia format).
-// For use with image.Decode, import the img subpackage: _ "github.com/woozymasta/paa/img".
+// PAA represents a PAA texture file (Arma/Bohemia format).
+// For use with [image.Decode], blank-import [github.com/woozymasta/paa/img].
 type PAA struct {
 	// Tag identifiers (e.g. "CGVA", "CXAM", "GALF", "ZIWS", "SFFO") are stored as-is.
 	// This package writes tags in the canonical order used by BI tools:
 	// CGVA, CXAM, GALF (optional), ZIWS (optional), SFFO.
 	Taggs map[string][]byte
 
-	// Mipmaps are stored in the file in order.
+	// Mipmaps are stored in the file in order as [MipMap] values.
 	MipMaps []*MipMap
 
 	// Palette is stored in the file.
 	Palette []byte
 
-	// Type is the PaxType of the texture.
+	// Type is the [PaxType] of the texture.
 	Type PaxType
 }

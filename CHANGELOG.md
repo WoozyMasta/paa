@@ -28,7 +28,9 @@ and this project adheres to [Semantic Versioning][].
 * Reuse one transform buffer for normal-map and generic channel swizzles,
   and apply decoded ZIWS transforms in place.
 * Generate only the mip levels needed to reach a TexConfig AutoReduce limit.
-* Reuse caller-owned LZSS buffers for non-DXT PAA encoding and decoding.
+* Upgrade LZSS to v0.3.0 and reuse caller-owned buffers
+  for non-DXT encoding and decoding.
+* Reuse LZO1X-999 encoder state for DXT mip compression at levels 2–9.
 
 ### Fixed
 
@@ -70,7 +72,7 @@ and this project adheres to [Semantic Versioning][].
   until premultiplied-alpha conversion is implemented.
 * `ToDDS` and `ToKTX` to return `ErrNilMipMap`
   for invalid PAA mip chains instead of panic or emitting shifted mip levels.
-* Сoncurrent reads of custom `image.Image` implementations
+* Concurrent reads of custom `image.Image` implementations
   during encoding by snapshotting non-NRGBA inputs and waiting
   for the stats worker on all error paths.
 

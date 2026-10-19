@@ -1,8 +1,16 @@
 # paa
 
-Go package for reading and writing **PAA** (Arma/DayZ texture) files.
-Supports DXT1/DXT5 and several uncompressed formats, mipmaps with LZO/LZSS,
-and optional registration with the standard `image` package.
+[paa] is a Go library for reading and writing [PAA][paa-format] textures
+used by Arma and DayZ.
+
+It helps asset tools and conversion pipelines work
+with game textures without losing their mipmaps, metadata,
+or format-specific encoding choices.
+
+Use `paa` to inspect and convert PAA files, create textures from Go images,
+or move compressed textures between PAA, DDS, and KTX.
+The package also supports TexConvert.cfg-style filename rules
+for choosing formats and swizzles during encoding.
 
 ## Features
 
@@ -11,162 +19,62 @@ and optional registration with the standard `image` package.
 * Optional registration with `image` via `paa/img`
 * TexConvert.cfg‑style resolution via `texconfig` (suffix → format/swizzle/etc.)
 
-## Usage
+## Installation
 
-### With `image.Decode`
+Add the dependency with:
 
-Import the **img** subpackage so that PAA is registered:
-
-```go
-import (
-  _ "github.com/woozymasta/paa/img"
-  "image"
-)
-
-img, format, err := image.Decode(f)
-cfg, _, err := image.DecodeConfig(f)
+```sh
+go get github.com/woozymasta/paa@latest
 ```
 
-### Direct API
+## Use
+
+Decode a PAA texture and encode a Go image:
 
 ```go
-import "github.com/woozymasta/paa"
+func convert(r io.Reader, w io.Writer) error {
+    texture, err := paa.DecodePAA(r)
+    if err != nil {
+        return err
+    }
 
-p, err := paa.DecodePAA(r)
-img, err := p.MipMaps[0].Image()
+    img, err := texture.MipMaps[0].Image()
+    if err != nil {
+        return err
+    }
 
-err = paa.Encode(w, img)
-```
-
-### Metadata-only fast path
-
-If you only need texture headers/tags (for example, building `texheaders`)
-without decoding mip payloads, use metadata helpers:
-
-```go
-// full GGAT map + mip headers
-meta, err := paa.DecodeMetadata(r)
-// Type + mip headers + CGVA/CXAM/GALF only
-headers, err := paa.DecodeMetadataHeaders(r)
-
-meta2, err := paa.DecodeMetadataBytes(data)
-headers2, err := paa.DecodeMetadataHeadersBytes(data)
-```
-
-For on-the-fly encode pipelines, you can collect compact metadata in the same
-encode pass (without reading the generated PAA again):
-
-```go
-headers, err := paa.EncodeWithOptionsAndMetadataHeaders(w, img, opts)
-```
-
-### PAA -> DDS/KTX (preserve mipmaps)
-
-If you need DDS/KTX with the original mip chain (without re-generating mipmaps),
-use full PAA decode and convert:
-
-```go
-import (
-  "github.com/woozymasta/paa"
-)
-
-p, err := paa.DecodePAA(r)
-dds, err := p.ToDDS()
-err = dds.Write(w)
-
-ktx, err := p.ToKTX()
-err = ktx.Write(w)
-```
-
-Or use a single-step helper:
-
-```go
-dds, err := paa.DecodeToDDS(r)
-err = dds.Write(w)
-
-ktx, err := paa.DecodeToKTX(r)
-err = ktx.Write(w)
-```
-
-> [!NOTE]  
-> direct conversion supports DXT-based PAA types.
-
-### TexConvert.cfg‑style encoding
-
-Use `texconfig` to resolve filename hints and apply swizzle/format rules:
-
-```go
-import (
-  "github.com/woozymasta/paa"
-  "github.com/woozymasta/paa/texconfig"
-)
-
-cfg, _ := texconfig.DefaultTexConvertConfig()
-err := paa.EncodeWithTexConfig(w, img, "my_texture_nohq.paa", cfg)
-```
-
-You can also parse a real `TexConvert.cfg` and override values before encoding:
-
-```go
-cfg, _ := texconfig.ParseFile("TexConvert.cfg")
-cfg.DisableAutoReduce = true
-err := paa.EncodeWithTexConfig(w, img, "my_texture_nohq.paa", cfg)
-```
-
-### Encoding options
-
-For explicit control, use `EncodeWithOptions`:
-
-```go
-opts := &paa.EncodeOptions{
-  Type:          paa.PaxDXT5,
-  UseLZO:        true,
-  ForceCXAMFull: true,
-  BCn: &bcn.EncodeOptions{
-    QualityLevel: bcn.QualityLevelBest,
-  },
+    return paa.Encode(w, img)
 }
-err := paa.EncodeWithOptions(w, img, opts)
 ```
+
+For standard-library image decoding,
+import `github.com/woozymasta/paa/img` to register PAA with `image.Decode`.
+Batch tools can reuse an `Encoder` or `Decoder` per worker
+to reuse their working buffers.
+
+## Capabilities
+
+* Decode and encode DXT1, DXT3, DXT5,
+  and uncompressed ARGB8, ARGB1555, ARGB4444, and GRAYA/AI88 formats.
+* Read mipmaps, texture tags, and headers;
+  metadata helpers can skip mip payloads when pixel data is not needed.
+* Convert DXT-based textures between PAA, DDS, and KTX
+  while retaining the original mip chain.
+* Apply TexConvert.cfg-style format, swizzle, and filename rules when encoding.
+* Use reusable encoders and decoders in batch pipelines
+  to reduce steady-state allocations.
+
+The package-level API is intended for one-off operations.
+`Encoder` and `Decoder` provide buffer reuse for repeated work.
 
 ## Concurrency and performance
 
-Block (de)compression is parallelized across workers (default: `GOMAXPROCS`),
-controlled by `Workers` in the BCn encode/decode options.
-A few rules of thumb:
+Default worker settings suit a single texture.
+For batches, parallelize across files and set BCn workers to `1` per call,
+using one `Encoder` or `Decoder` per goroutine.
+PAA decoding defaults to `min(GOMAXPROCS, 4)` BCn workers
+because its LZO decompression step is serial.
+Set a non-zero worker count in `DecodeOptions.BCn` to override it.
 
-* **Single texture, lowest latency:** keep the default (auto).
-  Encode scales well up to the number of physical cores;
-  beyond that (SMT threads) the gains are small.
-* **Decoding:** decode is dominated by LZO decompression and memory traffic,
-  so block parallelism helps little and regresses past ~4 workers.
-  The default is already capped at `min(GOMAXPROCS, 4)`;
-  set `DecodeOptions.BCn.Workers` explicitly only to override it
-  (e.g. `1` for batch).
-* **Batch / many files:** prefer parallelism at the *file* level
-  (one goroutine per file) with `Workers: 1` per call.
-  Per-image scaling is sublinear, so spreading cores across files
-  gives much higher total throughput than per-image parallelism.
-
-### Reusable Encoder/Decoder
-
-For batch pipelines, reuse a `paa.Encoder`/`paa.Decoder`
-per worker goroutine to avoid re-allocating the mip chain,
-BCn and (de)compression buffers on every image.
-Buffers grow to fit the largest image seen and are reused for smaller ones,
-cutting steady-state allocations by roughly 99% on large textures.
-
-```go
-enc := paa.NewEncoder() // one per goroutine; NOT safe for concurrent use
-for _, job := range jobs {
-    if err := enc.EncodeWithOptions(job.w, job.img, opts); err != nil {
-        // handle err
-    }
-}
-
-dec := paa.NewDecoder()
-img, err := dec.Decode(r) // valid only until the next Decode on this dec
-```
-
-The package-level `Encode`/`Decode`
-functions allocate per call and remain the simplest choice for one-off use.
+[paa]: https://pkg.go.dev/github.com/woozymasta/paa
+[paa-format]: https://community.bistudio.com/wiki/PAA_File_Format

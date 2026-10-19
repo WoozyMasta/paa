@@ -11,19 +11,18 @@ import (
 	"image/color"
 
 	"github.com/woozymasta/paa"
+	_ "github.com/woozymasta/paa/img"
 	"github.com/woozymasta/paa/texconfig"
 )
 
-func Example() {
+func ExampleEncode() {
 	img := image.NewNRGBA(image.Rect(0, 0, 4, 4))
-	img.SetNRGBA(1, 1, color.NRGBA{R: 255, G: 128, B: 64, A: 255})
-
 	var encoded bytes.Buffer
 	if err := paa.Encode(&encoded, img); err != nil {
 		panic(err)
 	}
 
-	decoded, err := paa.Decode(&encoded)
+	decoded, _, err := image.Decode(bytes.NewReader(encoded.Bytes()))
 	if err != nil {
 		panic(err)
 	}
@@ -33,6 +32,27 @@ func Example() {
 
 	// Output:
 	// decoded texture: 4x4
+}
+
+func ExampleDecodePAA() {
+	img := image.NewNRGBA(image.Rect(0, 0, 4, 4))
+	noMips := false
+	var encoded bytes.Buffer
+	if err := paa.EncodeWithOptions(&encoded, img, &paa.EncodeOptions{
+		Type:            paa.PaxARGB8,
+		GenerateMipmaps: &noMips,
+	}); err != nil {
+		panic(err)
+	}
+
+	texture, err := paa.DecodePAA(bytes.NewReader(encoded.Bytes()))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(len(texture.MipMaps))
+
+	// Output:
+	// 1
 }
 
 func ExampleEncodeWithTexConfig() {

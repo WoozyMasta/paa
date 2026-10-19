@@ -17,13 +17,14 @@ type EncodeOptions struct {
 	BCn *bcn.EncodeOptions
 	// Swizzle applies a generic channel swizzle before encoding (TexConvert.cfg style).
 	Swizzle *texconfig.ChannelSwizzle
-	// GenerateMipmaps controls mipmap generation. Nil = default (true).
+	// GenerateMipmaps controls mipmap generation. Nil defaults to true.
 	GenerateMipmaps *bool
 	// MipmapFilter selects a specific mipmap filter (TexConvert.cfg).
 	MipmapFilter *texconfig.MipmapFilter
 	// MaxMipCount limits the number of mip levels (including base). 0 = no limit.
 	MaxMipCount int
-	// MinMipSize stops mip generation when both dimensions are <= this value. 0 = default (4).
+	// MinMipSize stops mip generation when either dimension is <= this value.
+	// Zero defaults to 4 for DXT formats and 1 for uncompressed formats.
 	MinMipSize int
 	// LZOLevel controls LZO compression quality when UseLZO is true.
 	// 0 or 1 = fast LZO1X-1 (default); 2–9 = LZO1X-999 (better ratio, slower).
@@ -63,11 +64,11 @@ type EncodeOptions struct {
 }
 
 // DecodeOptions configures PAA decoding.
-// BCn options are forwarded to the BCn decoder (e.g. workers).
+// BCn options are forwarded to the BCn decoder.
+// When Workers is zero or BCn is nil, PAA uses min(GOMAXPROCS, 4) workers
+// because LZO decompression is serial.
 type DecodeOptions struct {
 	// BCn overrides DXT/BCn decoding options (workers).
-	// Nil uses bcn defaults.
+	// Nil uses PAA's decode defaults.
 	BCn *bcn.DecodeOptions
 }
-
-// Note: filename-based resolution is provided by the texconfig package.

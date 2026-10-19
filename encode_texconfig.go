@@ -94,6 +94,8 @@ func EncodeWithFallback(w io.Writer, img image.Image, name, fallbackSuffix strin
 }
 
 // EncodeOptionsFromHint converts a resolved TexConvert hint into EncodeOptions.
+// If skipSwizzle is true, the hint's channel swizzle is not applied to pixel data;
+// a corresponding ZIWS tag is still set when the hint requires one.
 func EncodeOptionsFromHint(
 	img image.Image,
 	hint texconfig.TextureHint,
