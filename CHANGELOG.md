@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
-## Unreleased
+## [0.6.0][] - 2026-10-20
 
 ### Added
 
@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning][].
 * Validate direct DDS/KTX mip chains and propagate LZO compression errors.
 * Enable DXT3 selection through TexConfig encoding.
 * Resolve TexConfig asset names independently of host path separators.
+
+[0.6.0]: https://github.com/WoozyMasta/paa/compare/v0.5.0...v0.6.0
 
 ## [0.5.0][] - 2026-08-02
 
