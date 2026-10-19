@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning][].
 
 ## Unreleased
 
+### Added
+
+* Add `Reset` methods to release buffers
+  retained by reusable encoders and decoders.
+
 ### Changed
 
 * Export DDS/KTX mip payloads by reference to the source PAA mip data.

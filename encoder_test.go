@@ -204,3 +204,45 @@ func TestEncoderReuseStable(t *testing.T) {
 		t.Fatal("re-encoding the same image through a reused Encoder produced different bytes")
 	}
 }
+
+func TestEncoderResetReleasesBuffersAndRemainsUsable(t *testing.T) {
+	var zero Encoder
+	zero.Reset()
+	zero.Reset()
+
+	enc := NewEncoder()
+	img := encoderTestImage(32, 24, true)
+	if err := enc.EncodeWithOptions(&bytes.Buffer{}, img, &EncodeOptions{
+		Type: PaxARGB8, GenerateMipmaps: ptrBool(true),
+	}); err != nil {
+		t.Fatalf("encode non-DXT image: %v", err)
+	}
+	if err := enc.EncodeWithOptions(&bytes.Buffer{}, img, &EncodeOptions{
+		Type: PaxDXT5, NormalMapSwizzle: true,
+	}); err != nil {
+		t.Fatalf("encode DXT image: %v", err)
+	}
+	if len(enc.mipPool) == 0 || len(enc.mipImages) == 0 || enc.transform == nil ||
+		len(enc.dxtBuf) == 0 || len(enc.rawBuf) == 0 || len(enc.payloads) == 0 || len(enc.mips) == 0 {
+		t.Fatal("encode did not populate all retained buffers")
+	}
+
+	enc.Reset()
+	if enc.mipPool != nil || enc.mipImages != nil || enc.transform != nil ||
+		enc.dxtBuf != nil || enc.rawBuf != nil || enc.payloads != nil || enc.mips != nil {
+		t.Fatal("Encoder.Reset did not release all retained buffers")
+	}
+	enc.Reset()
+
+	opts := &EncodeOptions{Type: PaxARGB8, GenerateMipmaps: ptrBool(false)}
+	var got, want bytes.Buffer
+	if err := enc.EncodeWithOptions(&got, img, opts); err != nil {
+		t.Fatalf("encode after reset: %v", err)
+	}
+	if err := EncodeWithOptions(&want, img, opts); err != nil {
+		t.Fatalf("package encode: %v", err)
+	}
+	if !bytes.Equal(got.Bytes(), want.Bytes()) {
+		t.Fatal("encode after reset differs from package encode")
+	}
+}

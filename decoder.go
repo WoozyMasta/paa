@@ -38,6 +38,14 @@ func NewDecoder() *Decoder {
 	return &Decoder{}
 }
 
+// Reset releases all buffers retained by d. The zero value remains ready to use.
+// Images and metadata slices returned before Reset remain valid while referenced
+// by the caller, but are no longer reused by d.
+// Reset is not safe to call concurrently with other Decoder methods.
+func (d *Decoder) Reset() {
+	*d = Decoder{}
+}
+
 // Decode reads a PAA stream and returns its first mip level as an image,
 // reusing the Decoder's buffers. See the Decoder type docs for reuse semantics.
 func (d *Decoder) Decode(r io.Reader) (image.Image, error) {

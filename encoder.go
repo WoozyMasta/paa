@@ -33,6 +33,12 @@ func NewEncoder() *Encoder {
 	return &Encoder{}
 }
 
+// Reset releases all buffers retained by e. The zero value remains ready to use.
+// Reset is not safe to call concurrently with other Encoder methods.
+func (e *Encoder) Reset() {
+	*e = Encoder{}
+}
+
 // Encode writes img as PAA with a single mip level using default settings.
 // See the package-level Encode for details.
 func (e *Encoder) Encode(w io.Writer, img image.Image) error {

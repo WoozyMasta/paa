@@ -117,3 +117,43 @@ func TestDecoderReuseStable(t *testing.T) {
 		t.Fatal("re-decoding the same stream through a reused Decoder produced different pixels")
 	}
 }
+
+func TestDecoderResetReleasesBuffersAndRemainsUsable(t *testing.T) {
+	var zero Decoder
+	zero.Reset()
+	zero.Reset()
+
+	data := encodePAA(t, encoderTestImage(32, 24, true), &EncodeOptions{
+		Type: PaxARGB8, GenerateMipmaps: ptrBool(true),
+	})
+	dec := NewDecoder()
+	if _, err := dec.Decode(bytes.NewReader(data)); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, err := dec.DecodeMetadataHeaders(bytes.NewReader(data)); err != nil {
+		t.Fatalf("DecodeMetadataHeaders: %v", err)
+	}
+	if dec.img == nil || len(dec.payload) == 0 || len(dec.raw) == 0 ||
+		len(dec.sffo) == 0 || len(dec.mipHeaders) == 0 {
+		t.Fatal("decode did not populate all retained buffers")
+	}
+
+	dec.Reset()
+	if dec.img != nil || dec.payload != nil || dec.raw != nil ||
+		dec.sffo != nil || dec.mipHeaders != nil {
+		t.Fatal("Decoder.Reset did not release all retained buffers")
+	}
+	dec.Reset()
+
+	got, err := dec.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decode after reset: %v", err)
+	}
+	want, err := Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("package decode: %v", err)
+	}
+	if !bytes.Equal(got.(*image.NRGBA).Pix, want.(*image.NRGBA).Pix) {
+		t.Fatal("decode after reset differs from package decode")
+	}
+}
