@@ -132,6 +132,8 @@ func TestEncoderMatchesPackage(t *testing.T) {
 		{Type: PaxDXT5, UseLZO: true, GenerateMipmaps: &yes},
 		{Type: PaxDXT1, UseLZO: true, GenerateMipmaps: &yes},
 		{Type: PaxDXT5, UseLZO: true, GenerateMipmaps: &no},
+		{Type: PaxARGB8, GenerateMipmaps: &yes},
+		{Type: PaxARGBA5, GenerateMipmaps: &yes},
 		nil,
 	}
 
@@ -149,6 +151,29 @@ func TestEncoderMatchesPackage(t *testing.T) {
 				t.Fatalf("case %d image %d: Encoder output differs from package EncodeWithOptions", ci, ii)
 			}
 		}
+	}
+}
+
+func TestEncodePixelFormatIntoReusesAndOverwritesBuffer(t *testing.T) {
+	img := encoderTestImage(4, 3, true)
+	buffer := bytes.Repeat([]byte{0xFF}, 4*3*4)
+	want := make([]byte, 0, 4*3*4)
+	for y := range 3 {
+		for x := range 4 {
+			c := img.NRGBAAt(x, y)
+			want = append(want, c.B, c.G, c.R, c.A)
+		}
+	}
+
+	got, err := encodePixelFormatInto(buffer[:0], PaxARGB8, img)
+	if err != nil {
+		t.Fatalf("encodePixelFormatInto: %v", err)
+	}
+	if &got[0] != &buffer[0] {
+		t.Fatal("encodePixelFormatInto did not reuse destination storage")
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("encodePixelFormatInto output differs from encodePixelFormat")
 	}
 }
 

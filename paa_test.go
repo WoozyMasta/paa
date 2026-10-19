@@ -707,9 +707,9 @@ func TestLZSSChecksumSigned(t *testing.T) {
 	}
 	stored := binary.LittleEndian.Uint32(payload[len(payload)-4:])
 
-	raw, err := encodePixelFormat(PaxARGBA5, img)
+	raw, err := encodePixelFormatInto(nil, PaxARGBA5, img)
 	if err != nil {
-		t.Fatalf("encodePixelFormat: %v", err)
+		t.Fatalf("encodePixelFormatInto: %v", err)
 	}
 	var sum int32
 	for _, b := range raw {

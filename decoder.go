@@ -159,13 +159,17 @@ func (d *Decoder) readMipImage(r io.Reader, paxType PaxType, opts *DecodeOptions
 		raw = d.payload
 
 	default:
-		// Non-DXT LZSS (rare): allocates per call.
-		dec, derr := lzss.Decompress(d.payload, expectedRaw, lzss.SignedLenientOptions())
+		d.raw = ensureLen(d.raw, expectedRaw)
+		nRead, derr := lzss.DecompressInto(d.raw, d.payload, lzss.SignedLenientOptions())
 		if derr != nil {
 			return nil, false, errors.Join(ErrLZSSDecompress, derr)
 		}
+		if nRead != len(d.payload) {
+			return nil, false, errors.Join(ErrLZSSDecompress,
+				fmt.Errorf("%w: consumed %d of %d bytes", lzss.ErrTrailingData, nRead, len(d.payload)))
+		}
 
-		raw = dec
+		raw = d.raw
 	}
 
 	if isDXT(paxType) {

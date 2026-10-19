@@ -280,9 +280,10 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 			}
 			e.payloads[i] = buf
 		} else {
-			// Non-DXT (rare): encode raw pixels and LZSS-compress. These paths
-			// allocate per mip as before.
-			raw, perr := encodePixelFormat(paxType, encodeImg)
+			// Non-DXT formats always use LZSS, so retain both raw and compressed storage
+			// across mips and repeated Encoder calls.
+			var perr error
+			e.rawBuf, perr = encodePixelFormatInto(e.rawBuf, paxType, encodeImg)
 			if perr != nil {
 				return perr
 			}
@@ -291,7 +292,8 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 			if opts != nil && opts.LZSSSearchLimit > 0 {
 				searchLimit = opts.LZSSSearchLimit
 			}
-			comp, cerr := lzss.Compress(raw, &lzss.CompressOptions{
+			buf := e.payload(i)
+			comp, cerr := lzss.AppendCompress(buf[:0], e.rawBuf, &lzss.CompressOptions{
 				Checksum:    lzss.ChecksumSigned,
 				SearchLimit: searchLimit,
 			})
@@ -299,10 +301,10 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 				return cerr
 			}
 
-			// Always store LZSS for non-DXT: official tools compress every mip
-			// unconditionally, and TexView expects LZSS even for tiny mips where
-			// compressed size exceeds raw size.
+			// Always store LZSS for non-DXT: official tools compress every mip unconditionally,
+			// and TexView expects LZSS even for tiny mips where compressed size exceeds raw size.
 			data = comp
+			e.payloads[i] = comp
 		}
 
 		b := encodeImg.Bounds()
@@ -337,7 +339,8 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		maxR, maxG, maxB, maxA = 255, 255, 255, 255
 	}
 
-	avgTag := [4]byte{uint8(avgB), uint8(avgG), uint8(avgR), uint8(avgA)} //nolint:gosec // stats are uint8-range by construction.
+	//nolint:gosec // stats are uint8-range by construction.
+	avgTag := [4]byte{uint8(avgB), uint8(avgG), uint8(avgR), uint8(avgA)}
 	maxTag := [4]byte{maxB, maxG, maxR, maxA}
 	if meta != nil {
 		meta.HasAverageColor = true
@@ -428,7 +431,8 @@ func (e *Encoder) encodeWithOptions(w io.Writer, img image.Image, opts *EncodeOp
 		dLen := len(m.data)
 		dataLen := uint32(dLen) //nolint:gosec // range-checked above.
 
-		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dataLen); err != nil { //nolint:gosec // range-checked above.
+		//nolint:gosec // range-checked above.
+		if err := writeMipHeader(w, uint16(storedW), uint16(m.h), dataLen); err != nil {
 			return err
 		}
 
@@ -450,7 +454,9 @@ func writeGGATTag(w io.Writer, name string, payload []byte) error {
 	var header [12]byte
 	copy(header[0:4], "GGAT")
 	copy(header[4:8], name)
-	binary.LittleEndian.PutUint32(header[8:12], uint32(len(payload))) //nolint:gosec // PAA tag payload sizes fit uint32.
+
+	//nolint:gosec // PAA tag payload sizes fit uint32.
+	binary.LittleEndian.PutUint32(header[8:12], uint32(len(payload)))
 	if _, err := w.Write(header[:]); err != nil {
 		return err
 	}

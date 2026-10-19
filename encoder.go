@@ -23,6 +23,7 @@ type Encoder struct {
 	mipImages []image.Image  // reusable view of the selected mip levels
 	transform *image.NRGBA   // reusable per-mip normal-map/channel transform
 	dxtBuf    []byte         // transient per-mip BCn output, reused each mip
+	rawBuf    []byte         // reusable encoded pixel data for non-DXT mip levels
 	payloads  [][]byte       // per-mip retained payloads (LZO/raw), reused across calls
 	mips      []mipBlock     // reusable per-mip metadata
 }

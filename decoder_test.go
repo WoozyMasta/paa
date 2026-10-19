@@ -6,8 +6,11 @@ package paa
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"testing"
+
+	"github.com/woozymasta/lzss"
 )
 
 func encodePAA(t *testing.T, img *image.NRGBA, opts *EncodeOptions) []byte {
@@ -32,6 +35,8 @@ func TestDecoderMatchesPackage(t *testing.T) {
 	cases := []*EncodeOptions{
 		{Type: PaxDXT5, UseLZO: true, GenerateMipmaps: &no},
 		{Type: PaxDXT1, UseLZO: true, GenerateMipmaps: &yes},
+		{Type: PaxARGB8, GenerateMipmaps: &yes},
+		{Type: PaxARGBA5, GenerateMipmaps: &yes},
 	}
 
 	dec := NewDecoder()
@@ -56,6 +61,32 @@ func TestDecoderMatchesPackage(t *testing.T) {
 				t.Fatalf("case %d image %d: Decoder output differs from package Decode", ci, ii)
 			}
 		}
+	}
+}
+
+func TestDecoderReuseRejectsTrailingLZSSInput(t *testing.T) {
+	data := encodePAA(t, encoderTestImage(8, 8, true), &EncodeOptions{
+		Type: PaxARGBA5, GenerateMipmaps: ptrBool(false),
+	})
+	off := firstMipOffset(parseTagg(data))
+	if off == 0 || off+7 > len(data) {
+		t.Fatal("invalid first mip offset")
+	}
+	stored := int(data[off+4]) | int(data[off+5])<<8 | int(data[off+6])<<16
+	if stored == 8*8*2 {
+		t.Fatal("fixture was not LZSS-compressed")
+	}
+	data = append(data, 0xA5)
+	stored++
+	data[off+4] = byte(stored)
+	data[off+5] = byte(stored >> 8)
+	data[off+6] = byte(stored >> 16)
+
+	dec := NewDecoder()
+	if _, err := dec.Decode(
+		bytes.NewReader(data),
+	); !errors.Is(err, ErrLZSSDecompress) || !errors.Is(err, lzss.ErrTrailingData) {
+		t.Fatalf("Decoder.Decode() error = %v, want ErrLZSSDecompress and lzss.ErrTrailingData", err)
 	}
 }
 

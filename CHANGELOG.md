@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning][].
 * Reuse one transform buffer for normal-map and generic channel swizzles,
   and apply decoded ZIWS transforms in place.
 * Generate only the mip levels needed to reach a TexConfig AutoReduce limit.
+* Reuse caller-owned LZSS buffers for non-DXT PAA encoding and decoding.
 
 ### Fixed
 

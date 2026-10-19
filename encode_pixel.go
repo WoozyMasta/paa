@@ -11,9 +11,9 @@ import (
 	"math"
 )
 
-// encodePixelFormat encodes img into raw uncompressed pixel data.
+// encodePixelFormatInto encodes img into dst, reusing its capacity when possible.
 // Used for non-DXT formats (ARGB8, ARGB1555, ARGB4444, GRAYA/AI88).
-func encodePixelFormat(format PaxType, img image.Image) ([]byte, error) {
+func encodePixelFormatInto(dst []byte, format PaxType, img image.Image) ([]byte, error) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 	if w <= 0 || h <= 0 {
@@ -22,11 +22,11 @@ func encodePixelFormat(format PaxType, img image.Image) ([]byte, error) {
 
 	switch format {
 	case PaxARGB8:
-		raw := make([]byte, w*h*4)
+		raw := ensureLen(dst, w*h*4)
 		i := 0
 		for y := b.Min.Y; y < b.Max.Y; y++ {
 			for x := b.Min.X; x < b.Max.X; x++ {
-				c := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+				c := pixelNRGBA(img, x, y)
 				raw[i+0] = c.B // store as BGRA
 				raw[i+1] = c.G
 				raw[i+2] = c.R
@@ -37,11 +37,11 @@ func encodePixelFormat(format PaxType, img image.Image) ([]byte, error) {
 		return raw, nil
 
 	case PaxARGBA5:
-		raw := make([]byte, w*h*2)
+		raw := ensureLen(dst, w*h*2)
 		i := 0
 		for y := b.Min.Y; y < b.Max.Y; y++ {
 			for x := b.Min.X; x < b.Max.X; x++ {
-				c := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+				c := pixelNRGBA(img, x, y)
 				a := uint16(0)
 				if c.A >= 128 {
 					a = 1
@@ -57,11 +57,11 @@ func encodePixelFormat(format PaxType, img image.Image) ([]byte, error) {
 		return raw, nil
 
 	case PaxARGB4:
-		raw := make([]byte, w*h*2)
+		raw := ensureLen(dst, w*h*2)
 		i := 0
 		for y := b.Min.Y; y < b.Max.Y; y++ {
 			for x := b.Min.X; x < b.Max.X; x++ {
-				c := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+				c := pixelNRGBA(img, x, y)
 				r := uint16(c.R >> 4)
 				g := uint16(c.G >> 4)
 				bl := uint16(c.B >> 4)
@@ -74,11 +74,11 @@ func encodePixelFormat(format PaxType, img image.Image) ([]byte, error) {
 		return raw, nil
 
 	case PaxGRAYA:
-		raw := make([]byte, w*h*2)
+		raw := ensureLen(dst, w*h*2)
 		i := 0
 		for y := b.Min.Y; y < b.Max.Y; y++ {
 			for x := b.Min.X; x < b.Max.X; x++ {
-				c := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+				c := pixelNRGBA(img, x, y)
 				l := uint8(math.Round(0.299*float64(c.R) + 0.587*float64(c.G) + 0.114*float64(c.B)))
 				raw[i+0] = l
 				raw[i+1] = c.A
@@ -90,4 +90,19 @@ func encodePixelFormat(format PaxType, img image.Image) ([]byte, error) {
 	default:
 		return nil, ErrUnsupportedPixelFmt
 	}
+}
+
+// pixelNRGBA reads NRGBA pixels directly and converts other image types.
+func pixelNRGBA(img image.Image, x, y int) color.NRGBA {
+	if nrgba, ok := img.(*image.NRGBA); ok {
+		i := nrgba.PixOffset(x, y)
+		return color.NRGBA{
+			R: nrgba.Pix[i+0],
+			G: nrgba.Pix[i+1],
+			B: nrgba.Pix[i+2],
+			A: nrgba.Pix[i+3],
+		}
+	}
+
+	return color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
 }
