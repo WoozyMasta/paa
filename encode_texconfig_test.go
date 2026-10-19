@@ -188,3 +188,22 @@ func TestAutoReduceIfNeededPreservesSRGBSelection(t *testing.T) {
 		t.Fatal("sRGB-reduced pixels differ from the expected mip")
 	}
 }
+
+func TestScanAlphaNRGBAFastPathMatchesImageInterface(t *testing.T) {
+	base := image.NewNRGBA(image.Rect(3, 5, 11, 12))
+	img := base.SubImage(image.Rect(5, 6, 10, 11)).(*image.NRGBA)
+	wrapped := struct{ image.Image }{Image: img}
+
+	for _, alpha := range []uint8{255, 0, 239, 240} {
+		for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
+			for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+				offset := img.PixOffset(x, y)
+				img.Pix[offset+3] = alpha
+			}
+		}
+
+		if got, want := scanAlpha(img), scanAlpha(wrapped); got != want {
+			t.Fatalf("scanAlpha with alpha %d = %+v, want %+v", alpha, got, want)
+		}
+	}
+}

@@ -204,6 +204,35 @@ type alphaStats struct {
 func scanAlpha(img image.Image) alphaStats {
 	b := img.Bounds()
 	stats := alphaStats{allHigh: true, isBinary: true}
+	// NRGBA is the common input type; reading Pix avoids per-pixel At/RGBA calls.
+	if nrgba, ok := img.(*image.NRGBA); ok {
+		width := b.Dx()
+		rowOffsetX := (b.Min.X - nrgba.Rect.Min.X) * 4
+
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			rowStart := (y-nrgba.Rect.Min.Y)*nrgba.Stride + rowOffsetX
+			row := nrgba.Pix[rowStart : rowStart+width*4]
+
+			for i := 3; i < len(row); i += 4 {
+				a := row[i]
+				if a < 255 {
+					stats.hasAlpha = true
+				}
+				if a < 0xF0 {
+					stats.allHigh = false
+				}
+				if a != 0 && a != 255 {
+					stats.isBinary = false
+				}
+			}
+		}
+
+		if !stats.hasAlpha {
+			stats.isBinary = true
+		}
+
+		return stats
+	}
 
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		for x := b.Min.X; x < b.Max.X; x++ {
